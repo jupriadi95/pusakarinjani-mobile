@@ -1,0 +1,49 @@
+name: pusaka
+description: "Aplikasi Manajemen Pertandingan Pencak Silat — IPSI Digital"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # HTTP Client
+  dio: ^5.4.0
+
+  # WebSocket Socket.io
+  socket_io_client: ^3.0.1
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+
+  # Routing
+  go_router: ^14.2.0
+
+  # Local Storage
+  shared_preferences: ^2.3.0
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # OTP Input for kode gelanggang
+  pin_code_fields: ^8.0.1
+
+  # QR Code Scanner
+  mobile_scanner: ^5.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
