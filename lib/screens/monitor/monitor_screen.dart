@@ -2,19 +2,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../config/theme.dart';
 import '../../models/gelanggang.dart';
+import '../../models/jadwal.dart';
+import '../../models/media.dart';
 import '../../models/nilai.dart';
 import '../../models/peserta.dart';
 import '../../providers/gelanggang_provider.dart';
+import '../../providers/jadwal_provider.dart';
 import '../../providers/nilai_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import '../../widgets/standby_screen.dart';
-import '../../widgets/timer_widget.dart';
 
-/// Monitor Screen — Live scoreboard display.
-/// Port of Nuxt's tanding/monitor/index.vue
+/// Monitor Screen — Arena Scoreboard Display for Large Screens / TV Displays.
+/// Features:
+/// - Athlete Photos (with fallback initials avatar), Contingent, and Perguruan.
+/// - Giant Total Scores with vibrant ambient glow.
+/// - Synchronized Countdown Timer & Vertical Round (Babak 1, 2, 3) Indicator.
+/// - Color-coded Vertical Score History Log (Pukulan, Tendangan, Jatuhan, Teguran, etc.).
+/// - KP Sanksi Status (Binaan, Teguran, Pembinaan).
+/// - Real-time Anonymous Dewan Verification Overlay (Vote counts for Blue, Red, Invalid).
+/// - Winner Announcement Modal at the end of the match.
 class MonitorScreen extends ConsumerStatefulWidget {
   const MonitorScreen({super.key});
 
@@ -28,12 +36,45 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
   bool _isConnected = false;
   Gelanggang? _gelanggang;
-  Peserta? _atlit1;
-  Peserta? _atlit2;
+  Peserta? _atlit1; // Blue corner athlete
+  Peserta? _atlit2; // Red corner athlete
+  Jadwal? _activeJadwal;
+
+  // ── Match Timer State ──
+  int _timerSeconds = 120;
+  bool _isTimerRunning = false;
+  Timer? _countdownTimer;
+
+  // ── KP Sanctions State ──
+  int _kpBinaanBiru = 0;
+  int _kpTeguranBiru = 0;
+  int _kpPembinaanBiru = 0;
+  int _kpBinaanMerah = 0;
+  int _kpTeguranMerah = 0;
+  int _kpPembinaanMerah = 0;
+
+  // ── Dewan Verification Overlay State (Anonymous Summary) ──
+  bool _verifikasiActive = false;
+  String _verifikasiJenis = 'jatuhan';
+  String? _verifikasiHasil;
+  final Map<String, String?> _verifikasiVotes = {
+    'juri_1': null,
+    'juri_2': null,
+    'juri_3': null,
+  };
+  Timer? _verifikasiDismissTimer;
+
+  // ── Winner Announcement State ──
+  bool _showWinnerModal = false;
 
   StreamSubscription? _connectionSub;
   StreamSubscription? _gelanggangSub;
   StreamSubscription? _nilaiSub;
+  StreamSubscription? _kpStatusSub;
+  StreamSubscription? _verifikasiMulaiSub;
+  StreamSubscription? _verifikasiVoteSub;
+  StreamSubscription? _verifikasiSelesaiSub;
+  StreamSubscription? _timerControlSub;
 
   @override
   void initState() {
@@ -52,10 +93,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     _gelanggang = ref.read(activeGelanggangProvider);
 
     if (_gelanggang != null) {
+      ref.read(jadwalListProvider.notifier).fetchJadwal(_gelanggang!);
+
       if (_gelanggang!.isBerlangsung) {
         _fetchPeserta(_gelanggang!.atlit1Id ?? '', 1);
         _fetchPeserta(_gelanggang!.atlit2Id ?? '', 2);
         _fetchNilai();
+        _startTimer();
       }
 
       _socketService.connect(
@@ -69,16 +113,160 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
     _gelanggangSub = _socketService.onGelanggangUpdated.listen((updated) {
       if (mounted) {
-        setState(() => _gelanggang = updated);
+        final wasBerlangsung = _gelanggang?.isBerlangsung ?? false;
+        final isNowFinished = updated.statusTanding == 'selesai' || (!updated.isBerlangsung && wasBerlangsung);
+
+        setState(() {
+          _gelanggang = updated;
+          if (updated.isBerlangsung) {
+            _showWinnerModal = false;
+            _startTimer();
+          } else {
+            _pauseTimer();
+          }
+        });
+
         ref.read(activeGelanggangProvider.notifier).updateFromSocket(updated);
+        ref.read(jadwalListProvider.notifier).fetchJadwal(updated);
         _fetchPeserta(updated.atlit1Id ?? '', 1);
         _fetchPeserta(updated.atlit2Id ?? '', 2);
+        _fetchNilai();
+
+        // Show winner celebration modal if match finished
+        if (isNowFinished && mounted) {
+          setState(() {
+            _showWinnerModal = true;
+          });
+        }
       }
     });
 
     _nilaiSub = _socketService.onNilaiCreated.listen((newNilai) {
       ref.read(nilaiListProvider.notifier).addFromSocket(newNilai);
     });
+
+    // ── KP Sanctions Status Listener ──
+    _kpStatusSub = _socketService.onKpStatus.listen((data) {
+      if (!mounted) return;
+      setState(() {
+        final merah = data['merah'] ?? data;
+        final biru = data['biru'] ?? data;
+
+        if (data.containsKey('merah') || data['sudut'] == 'merah') {
+          _kpBinaanMerah = (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah) as int;
+          _kpTeguranMerah = (merah['teguran'] ?? merah['kp_teguran_merah'] ?? _kpTeguranMerah) as int;
+          _kpPembinaanMerah = (merah['pembinaan'] ?? merah['kp_pembinaan_merah'] ?? _kpPembinaanMerah) as int;
+        }
+
+        if (data.containsKey('biru') || data['sudut'] == 'biru') {
+          _kpBinaanBiru = (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru) as int;
+          _kpTeguranBiru = (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru) as int;
+          _kpPembinaanBiru = (biru['pembinaan'] ?? biru['kp_pembinaan_biru'] ?? _kpPembinaanBiru) as int;
+        }
+      });
+
+      if (data['nilai'] != null && data['nilai'] is Map) {
+        try {
+          final n = Nilai.fromJson(Map<String, dynamic>.from(data['nilai'] as Map));
+          ref.read(nilaiListProvider.notifier).addFromSocket(n);
+        } catch (e) {
+          debugPrint('Error parsing kp nilai item: $e');
+        }
+      }
+
+      _fetchNilai();
+    });
+
+    _socketService.onJuriVoteConfirm.listen((_) => _fetchNilai());
+    _socketService.onSkorUpdate.listen((_) => _fetchNilai());
+
+    // ── Dewan Verification Socket Listeners ──
+    _verifikasiMulaiSub = _socketService.onVerifikasiMulai.listen((data) {
+      if (!mounted) return;
+      _verifikasiDismissTimer?.cancel();
+      setState(() {
+        _verifikasiActive = true;
+        _verifikasiJenis = data['jenis']?.toString() ?? 'jatuhan';
+        _verifikasiHasil = null;
+        _verifikasiVotes['juri_1'] = null;
+        _verifikasiVotes['juri_2'] = null;
+        _verifikasiVotes['juri_3'] = null;
+      });
+    });
+
+    _verifikasiVoteSub = _socketService.onVerifikasiVote.listen((data) {
+      if (!mounted || !_verifikasiActive) return;
+      final juriId = data['juriId']?.toString() ?? data['juri_id']?.toString() ?? '';
+      final pilihan = data['pilihan']?.toString() ?? '';
+
+      if (['juri_1', 'juri_2', 'juri_3'].contains(juriId)) {
+        setState(() {
+          _verifikasiVotes[juriId] = pilihan;
+        });
+      }
+    });
+
+    _verifikasiSelesaiSub = _socketService.onVerifikasiSelesai.listen((data) {
+      if (!mounted) return;
+      final hasil = data['hasil']?.toString() ?? '';
+
+      setState(() {
+        _verifikasiHasil = hasil;
+      });
+
+      _fetchNilai();
+
+      _verifikasiDismissTimer?.cancel();
+      _verifikasiDismissTimer = Timer(const Duration(milliseconds: 3500), () {
+        if (mounted) {
+          setState(() => _verifikasiActive = false);
+        }
+      });
+    });
+
+    // ── Synchronized Timer Control Listener (Mulai, Jeda/Pause, Lanjut/Resume, Stop) ──
+    _timerControlSub = _socketService.onTimerControl.listen((data) {
+      if (!mounted) return;
+      final action = data['action']?.toString();
+      final seconds = data['seconds'] as int?;
+
+      setState(() {
+        if (seconds != null) {
+          _timerSeconds = seconds;
+        }
+        if (action == 'pause') {
+          _pauseTimer();
+        } else if (action == 'resume' || action == 'start') {
+          _startTimer();
+        } else if (action == 'stop') {
+          _pauseTimer();
+        }
+      });
+    });
+  }
+
+  void _startTimer() {
+    _isTimerRunning = true;
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _timerSeconds > 0) {
+        setState(() => _timerSeconds--);
+      } else {
+        _isTimerRunning = false;
+        _countdownTimer?.cancel();
+      }
+    });
+  }
+
+  void _pauseTimer() {
+    _isTimerRunning = false;
+    _countdownTimer?.cancel();
+  }
+
+  String get _formattedTimer {
+    final mins = (_timerSeconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (_timerSeconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
   }
 
   Future<void> _fetchPeserta(String docId, int dst) async {
@@ -87,7 +275,6 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       final response = await _api.findOneProtect('pesertas', docId, params: {
         'populate[0]': 'action_foto',
         'populate[1]': 'pas_foto',
-        'populate[2]': 'kelas',
       });
       final data = response['data'];
       if (data is Map<String, dynamic> && mounted) {
@@ -113,11 +300,43 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     }
   }
 
+  String? _resolveImageUrl(Media? media) {
+    if (media == null || media.url == null || media.url!.isEmpty) return null;
+    final url = media.url!;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    return 'https://be.pusakarinjani.my.id$url';
+  }
+
+  String _resolveCurrentBabak() {
+    final list = ref.read(jadwalListProvider).valueOrNull ?? [];
+    if (list.isEmpty) return _activeJadwal?.babak ?? '1';
+
+    final a1 = _gelanggang?.atlit1Id;
+    final a2 = _gelanggang?.atlit2Id;
+
+    final match = list.where((j) {
+      final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
+      final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
+      return (mId == a1 && bId == a2) || (mId == a2 && bId == a1) || j.statusTanding == 'berlangsung';
+    }).firstOrNull;
+
+    return match?.babak ?? '1';
+  }
+
   @override
   void dispose() {
+    _verifikasiDismissTimer?.cancel();
+    _countdownTimer?.cancel();
     _connectionSub?.cancel();
     _gelanggangSub?.cancel();
     _nilaiSub?.cancel();
+    _kpStatusSub?.cancel();
+    _verifikasiMulaiSub?.cancel();
+    _verifikasiVoteSub?.cancel();
+    _verifikasiSelesaiSub?.cancel();
+    _timerControlSub?.cancel();
     _socketService.disconnect();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -127,7 +346,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   @override
   Widget build(BuildContext context) {
     // STATE 2: STANDBY
-    if (_gelanggang?.statusTanding != 'berlangsung') {
+    if (_gelanggang?.statusTanding != 'berlangsung' && !_showWinnerModal) {
       return Scaffold(
         body: StandbyScreen(
           eventInfo: _gelanggang?.event,
@@ -136,49 +355,55 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       );
     }
 
-    // STATE 1: ACTIVE SCOREBOARD
+    // STATE 1: ACTIVE SCOREBOARD (Large Arena Screen)
     return _buildActiveScoreboard();
   }
 
   Widget _buildActiveScoreboard() {
     final nilaiList = ref.watch(nilaiListProvider);
-    final atlit1Score =
-        countNilaiForPeserta(nilaiList, _gelanggang?.atlit1Id ?? '');
-    final atlit2Score =
-        countNilaiForPeserta(nilaiList, _gelanggang?.atlit2Id ?? '');
-    final atlit1Logs =
-        recentNilaiForPeserta(nilaiList, _gelanggang?.atlit1Id ?? '');
-    final atlit2Logs =
-        recentNilaiForPeserta(nilaiList, _gelanggang?.atlit2Id ?? '');
+    final a1Id = _gelanggang?.atlit1Id ?? '';
+    final a2Id = _gelanggang?.atlit2Id ?? '';
+
+    final atlit1Score = countNilaiForPeserta(nilaiList, a1Id, sudut: 'biru');
+    final atlit2Score = countNilaiForPeserta(nilaiList, a2Id, sudut: 'merah');
+    final atlit1Logs = recentNilaiForPeserta(nilaiList, a1Id, sudut: 'biru', limit: 5);
+    final atlit2Logs = recentNilaiForPeserta(nilaiList, a2Id, sudut: 'merah', limit: 5);
+    final currentBabak = _resolveCurrentBabak();
 
     return Scaffold(
       body: Container(
-        decoration:
-            const BoxDecoration(gradient: PusakaTheme.backgroundGradient),
+        decoration: const BoxDecoration(
+          color: Color(0xFF030712),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0F172A), Color(0xFF020617), Color(0xFF000000)],
+          ),
+        ),
         child: Stack(
           children: [
             // Background ambient glows
             Positioned(
-              top: MediaQuery.of(context).size.height * 0.3,
-              left: MediaQuery.of(context).size.width * 0.15,
+              top: MediaQuery.of(context).size.height * 0.25,
+              left: MediaQuery.of(context).size.width * 0.08,
               child: Container(
-                width: 350,
-                height: 350,
+                width: 420,
+                height: 420,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: PusakaTheme.blue600.withValues(alpha: 0.15),
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.18),
                 ),
               ),
             ),
             Positioned(
-              top: MediaQuery.of(context).size.height * 0.3,
-              right: MediaQuery.of(context).size.width * 0.15,
+              top: MediaQuery.of(context).size.height * 0.25,
+              right: MediaQuery.of(context).size.width * 0.08,
               child: Container(
-                width: 350,
-                height: 350,
+                width: 420,
+                height: 420,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: PusakaTheme.rose600.withValues(alpha: 0.15),
+                  color: const Color(0xFFE11D48).withValues(alpha: 0.18),
                 ),
               ),
             ),
@@ -186,33 +411,51 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  // Top Header
+                  // 1. Top Header Bar
                   _buildHeader(),
 
-                  // Main Scoreboard Grid
+                  // 2. Main Arena View: Dual Athlete Cards + Center Control Tower
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // SUDUT BIRU (LEFT)
                           Expanded(
-                            child: _buildAtletPanel(
+                            flex: 5,
+                            child: _buildAthleteCard(
                               atlit: _atlit1,
                               isRed: false,
                               score: atlit1Score,
                               logs: atlit1Logs,
+                              binaan: _kpBinaanBiru,
+                              teguran: _kpTeguranBiru,
+                              pembinaan: _kpPembinaanBiru,
                             ),
                           ),
-                          const SizedBox(width: 10),
+
+                          const SizedBox(width: 12),
+
+                          // CENTER MATCH CONTROLLER & BABAK INDICATOR
+                          SizedBox(
+                            width: 190,
+                            child: _buildCenterMatchInfo(currentBabak),
+                          ),
+
+                          const SizedBox(width: 12),
+
                           // SUDUT MERAH (RIGHT)
                           Expanded(
-                            child: _buildAtletPanel(
+                            flex: 5,
+                            child: _buildAthleteCard(
                               atlit: _atlit2,
                               isRed: true,
                               score: atlit2Score,
                               logs: atlit2Logs,
+                              binaan: _kpBinaanMerah,
+                              teguran: _kpTeguranMerah,
+                              pembinaan: _kpPembinaanMerah,
                             ),
                           ),
                         ],
@@ -220,451 +463,1384 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     ),
                   ),
 
-                  // Footer
+                  // 3. Footer Bar
                   _buildFooter(),
                 ],
               ),
             ),
+
+            // ── 4. Dewan Verification Anonymous Overlay ──
+            if (_verifikasiActive) _buildVerifikasiOverlay(),
+
+            // ── 5. Winner Celebration Modal (Akhir Pertandingan) ──
+            if (_showWinnerModal) _buildWinnerModal(atlit1Score, atlit2Score),
           ],
         ),
       ),
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 1. HEADER BAR ──
+  // ══════════════════════════════════════════════════════════════════════════
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
-        border: Border(
-          bottom:
-              BorderSide(color: PusakaTheme.slate800.withValues(alpha: 0.8)),
-        ),
+        color: const Color(0xFF090D16).withValues(alpha: 0.95),
+        border: const Border(bottom: BorderSide(color: Color(0xFF1E293B), width: 1.2)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Arena Badge
+          // Left: Event Title & Arena
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: const Icon(Icons.shield, color: Color(0xFF818CF8), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _gelanggang?.event?.namaEvent?.toUpperCase() ?? 'KEJUARAAN PENCAK SILAT 2026',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    'Arena ${_gelanggang?.keterangan ?? _gelanggang?.kodeGelanggang ?? '-'}',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Center: Match Category Badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: PusakaTheme.indigo950,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: PusakaTheme.indigo700),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.8), width: 1.2),
+            ),
+            child: Text(
+              _gelanggang?.keterangan?.toUpperCase() ?? 'TANDING KELAS DEWASA',
+              style: const TextStyle(
+                color: Color(0xFFA5B4FC),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+
+          // Right: Connection Status & Live Badge
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (_isConnected ? const Color(0xFF065F46) : const Color(0xFF881337)).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: _isConnected ? const Color(0xFF10B981) : const Color(0xFFE11D48),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185)).withValues(alpha: 0.6),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _isConnected ? 'LIVE SCOREBOARD' : 'OFFLINE',
+                      style: TextStyle(
+                        color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 2. CENTER MATCH INFO (TIMER + VERTICAL ROUND/BABAK INDICATOR) ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildCenterMatchInfo(String currentBabak) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF090D16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF1E293B), width: 1.8),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Big Digital Timer Box ──
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF334155), width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: PusakaTheme.indigo600.withValues(alpha: 0.2),
-                  blurRadius: 8,
+                  color: Colors.black.withValues(alpha: 0.6),
+                  blurRadius: 10,
                 ),
               ],
             ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _isTimerRunning
+                        ? const Color(0xFF065F46)
+                        : (_gelanggang?.statusTanding == 'berlangsung'
+                            ? const Color(0xFF78350F)
+                            : const Color(0xFF1E293B)),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    _isTimerRunning
+                        ? 'TIMER BERJALAN'
+                        : (_gelanggang?.statusTanding == 'berlangsung' ? 'WAKTU DIJEDA' : 'STANDBY'),
+                    style: TextStyle(
+                      color: _isTimerRunning
+                          ? const Color(0xFF34D399)
+                          : (_gelanggang?.statusTanding == 'berlangsung'
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFF94A3B8)),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formattedTimer,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'monospace',
+                    letterSpacing: 3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Round / Babak Section Header ──
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1B4B).withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'RONDE PERTANDINGAN',
+              style: TextStyle(color: Color(0xFFA78BFA), fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+              textAlign: TextAlign.center,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Babak 1, Babak 2, Babak 3 Stack ──
+          Expanded(child: _buildRoundBadgeItem('1', currentBabak == '1')),
+          const SizedBox(height: 6),
+          Expanded(child: _buildRoundBadgeItem('2', currentBabak == '2')),
+          const SizedBox(height: 6),
+          Expanded(child: _buildRoundBadgeItem('3', currentBabak == '3')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoundBadgeItem(String roundNumber, bool isActive) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        gradient: isActive
+            ? const LinearGradient(
+                colors: [Color(0xFFD97706), Color(0xFFB45309)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )
+            : null,
+        color: isActive ? null : const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? const Color(0xFFFBBF24) : const Color(0xFF1E293B),
+          width: isActive ? 2.0 : 1.0,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFFBBF24).withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'BABAK',
+            style: TextStyle(
+              color: isActive ? Colors.white : const Color(0xFF64748B),
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            roundNumber,
+            style: TextStyle(
+              color: isActive ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (isActive) ...[
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'AKTIF',
+                style: TextStyle(color: Color(0xFFFDE68A), fontSize: 7.5, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 3. ATHLETE CORNER CARDS (SUDUT BIRU & SUDUT MERAH) ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildAthleteCard({
+    required Peserta? atlit,
+    required bool isRed,
+    required int score,
+    required List<Nilai> logs,
+    required int binaan,
+    required int teguran,
+    required int pembinaan,
+  }) {
+    final gradientColors = isRed
+        ? const [
+            Color(0xFFE11D48), // Bright red
+            Color(0xFFBE123C), // Deep crimson
+            Color(0xFF4C0519), // Dark burgundy
+            Color(0xFF1C0208), // Edge shadow
+          ]
+        : const [
+            Color(0xFF0284C7), // Bright blue
+            Color(0xFF0369A1), // Royal blue
+            Color(0xFF07274E), // Dark navy
+            Color(0xFF051329), // Edge shadow
+          ];
+    final gradientBegin = isRed ? Alignment.centerRight : Alignment.centerLeft;
+    final gradientEnd = isRed ? Alignment.centerLeft : Alignment.centerRight;
+    final borderColor = isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8);
+    final glowColor = isRed ? const Color(0xFFE11D48) : const Color(0xFF0284C7);
+    final cornerTitle = isRed ? 'SUDUT MERAH' : 'SUDUT BIRU';
+    final photoUrl = _resolveImageUrl(atlit?.actionFoto) ?? _resolveImageUrl(atlit?.pasFoto);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: gradientBegin,
+          end: gradientEnd,
+          colors: gradientColors,
+          stops: const [0.0, 0.35, 0.75, 1.0],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 2.2),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.35),
+            blurRadius: 28,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Faint Background Watermark
+          Positioned(
+            left: isRed ? null : 16,
+            right: isRed ? 16 : null,
+            top: 4,
             child: Text(
-              'GELANGGANG ${_gelanggang?.kodeGelanggang ?? '-'}',
-              style: const TextStyle(
-                color: PusakaTheme.indigo300,
-                fontSize: 11,
+              isRed ? 'MERAH' : 'BIRU',
+              style: TextStyle(
+                fontSize: 92,
+                fontWeight: FontWeight.w900,
+                color: Colors.white.withValues(alpha: 0.12),
+                letterSpacing: 6,
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Header: Corner Name + Athlete Tag ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: borderColor.withValues(alpha: 0.8)),
+                      ),
+                      child: Text(
+                        cornerTitle,
+                        style: TextStyle(
+                          color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        atlit?.perguruan?.toUpperCase() ?? 'IPSI TANDING',
+                        style: TextStyle(
+                          color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Athlete Header Box (Name & Contingent Full Width) ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.38),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isRed ? const Color(0xFFE11D48).withValues(alpha: 0.3) : const Color(0xFF0284C7).withValues(alpha: 0.3),
+                          border: Border.all(color: borderColor.withValues(alpha: 0.6)),
+                        ),
+                        child: Icon(
+                          Icons.sports_martial_arts,
+                          color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              atlit?.namaLengkap?.toUpperCase() ?? 'BELUM ADA ATLET',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              atlit?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
+                              style: TextStyle(
+                                color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── KP Sanctions Status Row (Binaan, Teguran, Pembinaan) ──
+                _buildKpSanctionsBar(binaan, teguran, pembinaan, isRed),
+
+                const SizedBox(height: 8),
+
+                // ── 50% Atas: Side-by-Side Total Score & Athlete Photo ──
+                // Sudut Biru: Score on Left, Photo on Right
+                // Sudut Merah: Photo on Left, Score on Right
+                Expanded(
+                  flex: 1,
+                  child: _buildScoreAndPhotoSection(
+                    atlit: atlit,
+                    isRed: isRed,
+                    score: score,
+                    photoUrl: photoUrl,
+                    borderColor: borderColor,
+                    glowColor: glowColor,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── 50% Bawah: Score History Box ──
+                Expanded(
+                  flex: 1,
+                  child: _buildScoreHistoryList(logs, isRed),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Side-by-Side Score & Large Photo Box (135pt height)
+  Widget _buildScoreAndPhotoSection({
+    required Peserta? atlit,
+    required bool isRed,
+    required int score,
+    required String? photoUrl,
+    required Color borderColor,
+    required Color glowColor,
+  }) {
+    final scoreWidget = Expanded(
+      flex: 5,
+      child: Container(
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 2.0),
+          boxShadow: [
+            BoxShadow(
+              color: glowColor.withValues(alpha: 0.35),
+              blurRadius: 18,
+            ),
+          ],
+        ),
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                '$score',
+                style: TextStyle(
+                  fontSize: 78,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'monospace',
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(
+                      color: glowColor,
+                      blurRadius: 24,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final photoWidget = Expanded(
+      flex: 4,
+      child: Container(
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor.withValues(alpha: 0.9), width: 2.0),
+          boxShadow: [
+            BoxShadow(
+              color: glowColor.withValues(alpha: 0.3),
+              blurRadius: 14,
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: photoUrl != null
+            ? Image.network(
+                photoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => _buildLargePhotoPlaceholder(atlit, isRed),
+              )
+            : _buildLargePhotoPlaceholder(atlit, isRed),
+      ),
+    );
+
+    return Row(
+      children: isRed
+          ? [
+              // Sudut Merah: Photo on Left, Score on Right
+              photoWidget,
+              const SizedBox(width: 8),
+              scoreWidget,
+            ]
+          : [
+              // Sudut Biru: Score on Left, Photo on Right
+              scoreWidget,
+              const SizedBox(width: 8),
+              photoWidget,
+            ],
+    );
+  }
+
+  Widget _buildLargePhotoPlaceholder(Peserta? atlit, bool isRed) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isRed
+              ? const [Color(0xFF3B0714), Color(0xFF1C0208)]
+              : const [Color(0xFF072448), Color(0xFF031024)],
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.person,
+            size: 78,
+            color: Colors.white.withValues(alpha: 0.12),
+          ),
+          Center(
+            child: Text(
+              atlit?.initials ?? '?',
+              style: TextStyle(
+                color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                fontSize: 36,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2,
               ),
             ),
           ),
-
-          const SizedBox(width: 12),
-
-          // Event Name
-          Expanded(
-            child: Text(
-              _gelanggang?.event?.namaEvent ?? 'KEJUARAAN PENCAK SILAT',
-              style: const TextStyle(
-                color: PusakaTheme.amber400,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-          // Timer
-          const TimerWidget(
-            initialSeconds: 120,
-            countdownMode: true,
-            autoStart: true,
-            hideControls: true,
-          ),
-
-          const SizedBox(width: 12),
-
-          // Live Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: PusakaTheme.emerald950.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: PusakaTheme.emerald400.withValues(alpha: 0.5)),
-              boxShadow: [
-                BoxShadow(
-                  color: PusakaTheme.emerald400.withValues(alpha: 0.15),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: PusakaTheme.emerald400,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'LIVE SCOREBOARD',
-                  style: TextStyle(
-                    color: PusakaTheme.emerald400,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildAtletPanel({
-    required Peserta? atlit,
-    required bool isRed,
-    required int score,
-    required List<Nilai> logs,
-  }) {
-    final borderColor = isRed ? PusakaTheme.rose600 : PusakaTheme.blue600;
-    final accentLight = isRed ? PusakaTheme.rose400 : PusakaTheme.blue400;
-    final accentDark = isRed ? PusakaTheme.rose600 : PusakaTheme.blue600;
-    final scoreGradient = isRed
-        ? const [PusakaTheme.rose600, PusakaTheme.rose800]
-        : const [PusakaTheme.blue600, PusakaTheme.blue800];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: PusakaTheme.slate900.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(PusakaTheme.radius2xl),
-        border: Border.all(color: borderColor.withValues(alpha: 0.8), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: borderColor.withValues(alpha: 0.2),
-            blurRadius: 40,
-            spreadRadius: -5,
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          // Corner Badge Header
-          Row(
-            mainAxisAlignment:
-                isRed ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: [
-              if (!isRed) ...[
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentDark,
-                    boxShadow: [
-                      BoxShadow(
-                          color: accentDark.withValues(alpha: 0.5),
-                          blurRadius: 4),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                isRed ? 'Sudut Merah' : 'Sudut Biru',
-                style: TextStyle(
-                  color: accentLight,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
-                ),
-              ),
-              if (isRed) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentDark,
-                    boxShadow: [
-                      BoxShadow(
-                          color: accentDark.withValues(alpha: 0.5),
-                          blurRadius: 4),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-
-          Divider(color: borderColor.withValues(alpha: 0.4), height: 16),
-
-          // Athlete Info + Score
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Athlete Photo / Placeholder
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(PusakaTheme.radiusLg),
-                    border: Border.all(
-                        color: borderColor.withValues(alpha: 0.6), width: 2),
-                    color: PusakaTheme.slate950,
-                  ),
-                  child: atlit?.actionFoto?.url != null ||
-                          atlit?.pasFoto?.url != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                              PusakaTheme.radiusLg - 2),
-                          child: Image.network(
-                            '${_api.toString().isEmpty ? '' : ''}${atlit?.actionFoto?.url ?? atlit?.pasFoto?.url ?? ''}',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, e2, s2) =>
-                                _buildPhotoPlaceholder(isRed),
-                          ),
-                        )
-                      : _buildPhotoPlaceholder(isRed),
-                ),
-
-                const SizedBox(height: 10),
-
-                // Name
-                Text(
-                  atlit?.namaLengkap ?? (isRed ? 'ATLIT MERAH' : 'ATLIT BIRU'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.3,
-                  ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-
-                Text(
-                  atlit?.kontingen ?? 'Kontingen -',
-                  style: TextStyle(
-                    color: accentLight,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Giant Score Box
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: scoreGradient,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(PusakaTheme.radiusLg),
-                    border: Border.all(color: accentLight, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentDark.withValues(alpha: 0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'TOTAL POIN',
-                        style: TextStyle(
-                          color: accentLight,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      Text(
-                        '$score',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 56,
-                          fontWeight: FontWeight.w900,
-                          height: 1.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Score Log Feed
-          Container(
-            padding: const EdgeInsets.only(top: 8),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                    color: borderColor.withValues(alpha: 0.3)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  isRed ? 'LOG POIN MERAH:' : 'LOG POIN BIRU:',
-                  style: TextStyle(
-                    color: accentLight,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: logs.isEmpty
-                      ? const Text(
-                          'Belum ada poin',
-                          style: TextStyle(
-                            color: PusakaTheme.slate500,
-                            fontSize: 9,
-                            fontStyle: FontStyle.italic,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: logs.map((log) {
-                              return Container(
-                                margin: const EdgeInsets.only(right: 6),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: (isRed
-                                          ? PusakaTheme.rose950
-                                          : PusakaTheme.blue950)
-                                      .withValues(alpha: 0.9),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: (isRed
-                                          ? PusakaTheme.rose800
-                                          : PusakaTheme.blue800)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '+${log.jumlah}',
-                                      style: TextStyle(
-                                        color: (isRed
-                                            ? PusakaTheme.rose400
-                                            : PusakaTheme.blue400),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      '(${log.poinLabel})',
-                                      style: TextStyle(
-                                        color: (isRed
-                                                ? PusakaTheme.rose400
-                                                : PusakaTheme.blue400)
-                                            .withValues(alpha: 0.7),
-                                        fontSize: 9,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhotoPlaceholder(bool isRed) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+  // ── KP Sanctions Pill Bar ──
+  Widget _buildKpSanctionsBar(int binaan, int teguran, int pembinaan, bool isRed) {
+    return Row(
       children: [
-        Icon(
-          Icons.shield,
-          size: 36,
-          color: (isRed ? PusakaTheme.rose400 : PusakaTheme.blue400)
-              .withValues(alpha: 0.4),
+        Expanded(
+          child: _buildSanctionPill('BINAAN', binaan, 2, const Color(0xFF6366F1)),
         ),
-        const SizedBox(height: 4),
-        Text(
-          isRed ? 'FOTO MERAH' : 'FOTO BIRU',
-          style: const TextStyle(
-            color: PusakaTheme.slate400,
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1,
-          ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _buildSanctionPill('TEGURAN', teguran, 2, const Color(0xFFEA580C)),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _buildSanctionPill('PEMBINAAN', pembinaan, 2, const Color(0xFFE11D48)),
         ),
       ],
     );
   }
 
+  Widget _buildSanctionPill(String label, int current, int max, Color themeColor) {
+    final isActive = current > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      decoration: BoxDecoration(
+        color: isActive ? themeColor.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isActive ? themeColor : const Color(0xFF334155),
+          width: isActive ? 1.2 : 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              color: isActive ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 8.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '$current/$max',
+            style: TextStyle(
+              color: isActive ? themeColor : const Color(0xFF64748B),
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Color-Coded Vertical Score History List (Identical to Dewan) ──
+  Widget _buildScoreHistoryList(List<Nilai> logs, bool isRed) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'RIWAYAT POIN TERAKHIR',
+                style: TextStyle(
+                  color: isRed ? const Color(0xFFFDA4AF) : const Color(0xFF7DD3FC),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              Text(
+                '${logs.length}/5 TERBARU',
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 8.5, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: logs.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Belum ada riwayat poin',
+                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.w600),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: logs.length,
+                    separatorBuilder: (ctx, idx) => const SizedBox(height: 3),
+                    itemBuilder: (ctx, idx) {
+                      final n = logs[idx];
+                      return _buildLogRowItem(n);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogRowItem(Nilai n) {
+    final jenis = (n.jenis ?? '').toLowerCase();
+    final jumlah = n.jumlah ?? 0;
+
+    Color bgColor;
+    Color borderColor;
+    Color textColor;
+    IconData icon;
+
+    if (jenis == 'pukulan' || jumlah == 1) {
+      bgColor = const Color(0xFF0C4A6E).withValues(alpha: 0.45);
+      borderColor = const Color(0xFF0284C7);
+      textColor = const Color(0xFF7DD3FC);
+      icon = Icons.sports_mma_rounded;
+    } else if (jenis == 'tendangan' || jumlah == 2) {
+      bgColor = const Color(0xFF064E3B).withValues(alpha: 0.45);
+      borderColor = const Color(0xFF10B981);
+      textColor = const Color(0xFF6EE7B7);
+      icon = Icons.sports_martial_arts_rounded;
+    } else if (jenis == 'jatuhan' || jumlah == 3) {
+      bgColor = const Color(0xFF78350F).withValues(alpha: 0.5);
+      borderColor = const Color(0xFFF59E0B);
+      textColor = const Color(0xFFFDE68A);
+      icon = Icons.verified_user_rounded;
+    } else if (jenis == 'batal_jatuhan' || jumlah == -3) {
+      bgColor = const Color(0xFF27272A).withValues(alpha: 0.6);
+      borderColor = const Color(0xFF71717A);
+      textColor = const Color(0xFFD4D4D8);
+      icon = Icons.replay_rounded;
+    } else if (jenis == 'binaan' || (jumlah == 0 && jenis.isNotEmpty)) {
+      bgColor = const Color(0xFF1E1B4B).withValues(alpha: 0.5);
+      borderColor = const Color(0xFF6366F1);
+      textColor = const Color(0xFFA5B4FC);
+      icon = Icons.info_outline;
+    } else if (jenis == 'teguran' || jumlah == -1 || jumlah == -2) {
+      bgColor = const Color(0xFF7C2D12).withValues(alpha: 0.45);
+      borderColor = const Color(0xFFEA580C);
+      textColor = const Color(0xFFFDBA74);
+      icon = Icons.warning_amber_rounded;
+    } else if (jenis == 'pembinaan' || jenis == 'peringatan' || jumlah == -5 || jumlah == -10) {
+      bgColor = const Color(0xFF881337).withValues(alpha: 0.5);
+      borderColor = const Color(0xFFE11D48);
+      textColor = const Color(0xFFFECDD3);
+      icon = Icons.report_problem_rounded;
+    } else if (jenis == 'diskualifikasi') {
+      bgColor = const Color(0xFF581C87).withValues(alpha: 0.55);
+      borderColor = const Color(0xFFA855F7);
+      textColor = const Color(0xFFE9D5FF);
+      icon = Icons.gavel_rounded;
+    } else {
+      bgColor = const Color(0xFF1E293B).withValues(alpha: 0.5);
+      borderColor = const Color(0xFF475569);
+      textColor = const Color(0xFFE2E8F0);
+      icon = Icons.circle;
+    }
+
+    final juriSource = (n.juriId != null && n.juriId!.isNotEmpty)
+        ? (n.juriId!.toLowerCase() == 'kp' ? 'Dewan (KP)' : n.juriId!.toUpperCase())
+        : (n.juriCount != null && n.juriCount! > 1 ? '${n.juriCount} Juri' : 'Juri');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor, width: 0.9),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: textColor),
+              const SizedBox(width: 6),
+              Text(
+                n.poinLabel,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              if (n.menitKe != null && n.menitKe!.isNotEmpty) ...[
+                Text(
+                  n.menitKe!,
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.75),
+                    fontSize: 8.5,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: borderColor.withValues(alpha: 0.35), width: 0.5),
+                ),
+                child: Text(
+                  juriSource,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 4. DEWAN VERIFICATION ANONYMOUS REAL-TIME BROADCAST OVERLAY ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildVerifikasiOverlay() {
+    final votes = _verifikasiVotes.values.toList();
+    final countBiru = votes.where((v) => v == 'biru').length;
+    final countMerah = votes.where((v) => v == 'merah').length;
+    final countInvalid = votes.where((v) => v == 'invalid').length;
+    final totalVoted = votes.where((v) => v != null).length;
+    final jenisTitle = _verifikasiJenis.toUpperCase();
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.90),
+      child: Center(
+        child: Container(
+          width: 820,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF090D16),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF0284C7), width: 3.0),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.5),
+                blurRadius: 36,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Overlay Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF38BDF8), size: 32),
+                  ),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'VERIFIKASI $jenisTitle SEDANG BERLANGSUNG',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      Text(
+                        'Konsensus $totalVoted / 3 Juri Pertandingan Memberikan Keputusan',
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+              const Divider(color: Color(0xFF1E293B), height: 1),
+              const SizedBox(height: 20),
+
+              // 3 Anonymous Summary Cards (Count only without individual jury IDs)
+              Row(
+                children: [
+                  // 1. INVALID / TIDAK SAH CARD
+                  Expanded(
+                    child: _buildAnonymousSummaryCard(
+                      label: 'INVALID / TIDAK SAH',
+                      count: countInvalid,
+                      color: const Color(0xFF64748B),
+                      borderColor: const Color(0xFF94A3B8),
+                      icon: Icons.cancel_outlined,
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // 2. JATUHAN SUDUT BIRU CARD
+                  Expanded(
+                    child: _buildAnonymousSummaryCard(
+                      label: 'JATUHAN BIRU',
+                      count: countBiru,
+                      color: const Color(0xFF0284C7),
+                      borderColor: const Color(0xFF38BDF8),
+                      icon: Icons.sports_martial_arts,
+                      athleteName: _atlit1?.namaLengkap,
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // 3. JATUHAN SUDUT MERAH CARD
+                  Expanded(
+                    child: _buildAnonymousSummaryCard(
+                      label: 'JATUHAN MERAH',
+                      count: countMerah,
+                      color: const Color(0xFFE11D48),
+                      borderColor: const Color(0xFFFB7185),
+                      icon: Icons.sports_martial_arts,
+                      athleteName: _atlit2?.namaLengkap,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+
+              // Final Verdict Banner or Waiting Spinner
+              if (_verifikasiHasil != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: _verifikasiHasil == 'biru'
+                        ? const Color(0xFF0369A1).withValues(alpha: 0.45)
+                        : _verifikasiHasil == 'merah'
+                            ? const Color(0xFF9F1239).withValues(alpha: 0.45)
+                            : const Color(0xFF334155).withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _verifikasiHasil == 'biru'
+                          ? const Color(0xFF38BDF8)
+                          : _verifikasiHasil == 'merah'
+                              ? const Color(0xFFFB7185)
+                              : const Color(0xFFCBD5E1),
+                      width: 2.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _verifikasiHasil == 'invalid' ? Icons.cancel_outlined : Icons.check_circle_rounded,
+                        color: _verifikasiHasil == 'biru'
+                            ? const Color(0xFF38BDF8)
+                            : _verifikasiHasil == 'merah'
+                                ? const Color(0xFFFB7185)
+                                : const Color(0xFFCBD5E1),
+                        size: 32,
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        _verifikasiHasil == 'invalid'
+                            ? 'KEPUTUSAN KONSENSUS: JATUHAN TIDAK SAH (INVALID)'
+                            : 'KEPUTUSAN KONSENSUS: JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()} (+3)',
+                        style: TextStyle(
+                          color: _verifikasiHasil == 'biru'
+                              ? const Color(0xFF38BDF8)
+                              : _verifikasiHasil == 'merah'
+                                  ? const Color(0xFFFB7185)
+                                  : const Color(0xFFCBD5E1),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF1E293B)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF38BDF8)),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Menunggu Input Keputusan 2 dari 3 Juri...',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnonymousSummaryCard({
+    required String label,
+    required int count,
+    required Color color,
+    required Color borderColor,
+    required IconData icon,
+    String? athleteName,
+  }) {
+    final hasVotes = count > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+      decoration: BoxDecoration(
+        color: hasVotes ? color.withValues(alpha: 0.35) : const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasVotes ? borderColor : const Color(0xFF1E293B),
+          width: hasVotes ? 2.2 : 1.2,
+        ),
+        boxShadow: hasVotes
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.3),
+                  blurRadius: 14,
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: hasVotes ? Colors.white : const Color(0xFF64748B), size: 36),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: hasVotes ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (athleteName != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              athleteName,
+              style: TextStyle(
+                color: hasVotes ? borderColor : const Color(0xFF64748B),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: hasVotes ? borderColor : const Color(0xFF334155)),
+            ),
+            child: Text(
+              '$count JURI',
+              style: TextStyle(
+                color: hasVotes ? Colors.white : const Color(0xFF64748B),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 5. WINNER CELEBRATION MODAL (AKHIR PERTANDINGAN) ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWinnerModal(int biruScore, int merahScore) {
+    final isBiruWin = biruScore > merahScore;
+    final isMerahWin = merahScore > biruScore;
+
+    final winnerColor = isBiruWin
+        ? const Color(0xFF0284C7)
+        : isMerahWin
+            ? const Color(0xFFE11D48)
+            : const Color(0xFFD97706);
+    final winnerBorder = isBiruWin
+        ? const Color(0xFF38BDF8)
+        : isMerahWin
+            ? const Color(0xFFFB7185)
+            : const Color(0xFFFBBF24);
+    final winnerTitle = isBiruWin
+        ? 'SUDUT BIRU'
+        : isMerahWin
+            ? 'SUDUT MERAH'
+            : 'SERI / DRAW';
+    final winnerName = isBiruWin
+        ? (_atlit1?.namaLengkap ?? 'Peserta Sudut Biru')
+        : isMerahWin
+            ? (_atlit2?.namaLengkap ?? 'Peserta Sudut Merah')
+            : 'Kedua Atlet Mendapat Skor Sama';
+    final winnerKontingen = isBiruWin
+        ? (_atlit1?.kontingen ?? '-')
+        : isMerahWin
+            ? (_atlit2?.kontingen ?? '-')
+            : '-';
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.92),
+      child: Center(
+        child: Container(
+          width: 860,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: const Color(0xFF090D16),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: winnerBorder, width: 3.5),
+            boxShadow: [
+              BoxShadow(
+                color: winnerColor.withValues(alpha: 0.6),
+                blurRadius: 42,
+                spreadRadius: 6,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Trophy Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: winnerColor.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: winnerBorder, width: 2.0),
+                ),
+                child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFBBF24), size: 54),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Title
+              const Text(
+                'PERTANDINGAN SELESAI',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'PEMENANG $winnerTitle',
+                style: TextStyle(
+                  color: winnerBorder,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0,
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Winner Athlete Box
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: winnerColor.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      winnerName.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      winnerKontingen.toUpperCase(),
+                      style: TextStyle(
+                        color: winnerBorder,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // Final Score Comparison Box
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Blue Corner Final Score
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0369A1).withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(
+                          '$biruScore',
+                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'VS',
+                      style: TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+
+                  // Red Corner Final Score
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9F1239).withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(
+                          '$merahScore',
+                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // Dismiss / Standby Button
+              GestureDetector(
+                onTap: () {
+                  setState(() => _showWinnerModal = false);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF475569)),
+                  ),
+                  child: const Text(
+                    'TUTUP BANNER PEMENANG',
+                    style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── 6. FOOTER BAR ──
+  // ══════════════════════════════════════════════════════════════════════════
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: PusakaTheme.slate800.withValues(alpha: 0.8)),
-        ),
+        color: const Color(0xFF020617),
+        border: const Border(top: BorderSide(color: Color(0xFF1E293B))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'Sistem Scoreboard Digital IPSI © 2026',
-            style: TextStyle(
-              color: PusakaTheme.slate500,
-              fontSize: 9,
-              fontWeight: FontWeight.w500,
-            ),
+            'Sistem Scoreboard Arena Resmi IPSI © 2026',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.w600),
           ),
           Row(
             children: [
-              Icon(Icons.cell_tower,
-                  color: _isConnected ? PusakaTheme.emerald400 : PusakaTheme.rose400, size: 12),
-              const SizedBox(width: 4),
+              Icon(Icons.cell_tower, color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185), size: 13),
+              const SizedBox(width: 5),
               Text(
-                _isConnected ? 'Penilaian Poin Realtime Terhubung' : 'Koneksi Terputus',
+                _isConnected ? 'Realtime Scoring Arena Sinkron' : 'Koneksi Terputus',
                 style: TextStyle(
-                  color: _isConnected ? PusakaTheme.slate400 : PusakaTheme.rose400,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
+                  color: _isConnected ? const Color(0xFF94A3B8) : const Color(0xFFFB7185),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

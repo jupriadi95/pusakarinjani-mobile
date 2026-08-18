@@ -5,7 +5,6 @@ import '../models/gelanggang.dart';
 import '../services/api_service.dart';
 
 /// Jadwal list provider — fetches match schedules for a gelanggang.
-/// Equivalent to Nuxt operator's fetchJadwal().
 final jadwalListProvider =
     StateNotifierProvider<JadwalListNotifier, AsyncValue<List<Jadwal>>>((ref) {
   return JadwalListNotifier();
@@ -16,56 +15,33 @@ class JadwalListNotifier extends StateNotifier<AsyncValue<List<Jadwal>>> {
 
   final _api = ApiService();
 
-  /// Fetch jadwal list for a specific gelanggang.
-  /// Mirrors the complex fetching logic in operator/index.vue
+  /// Fetch jadwal list directly and quickly from Strapi REST API.
   Future<void> fetchJadwal(Gelanggang gelanggang) async {
     state = const AsyncValue.loading();
     try {
-      final eventId = gelanggang.event?.documentId ??
+      final targetDocId = gelanggang.documentId ?? '';
+      final targetId = gelanggang.id?.toString() ?? '';
+      final eventDocId = gelanggang.event?.documentId ??
           gelanggang.event?.id?.toString() ??
           '';
 
-      List<Jadwal> allJadwals = [];
+      // Use standard Strapi populate=* and pagination to avoid 400 Bad Request on invalid relation keys
+      final Map<String, dynamic> params = {
+        'populate': '*',
+        'pagination[pageSize]': '100',
+        'sort[0]': 'nomor_partai:asc',
+      };
 
-      // 1. Try custom backend endpoint GET /jadwal/event/:eventId
-      if (eventId.isNotEmpty) {
-        try {
-          final customResult = await _api.fetchJadwalByEvent(eventId);
-          allJadwals = customResult
-              .map((e) => Jadwal.fromJson(e as Map<String, dynamic>))
-              .toList();
-        } catch (err) {
-          debugPrint('GET /jadwal/event failed: $err');
-        }
-      }
+      final response = await _api.findProtect('jadwals', params: params);
+      final data = response['data'] as List? ?? [];
+      final allJadwals =
+          data.map((e) => Jadwal.fromJson(e as Map<String, dynamic>)).toList();
 
-      // 2. Fallback to standard Strapi findProtect
-      if (allJadwals.isEmpty) {
-        final Map<String, dynamic> params = {
-          'populate[0]': 'gelanggang',
-          'populate[1]': 'kelas',
-          'populate[2]': 'atlit_merah',
-          'populate[3]': 'atlit_biru',
-          'populate[4]': 'peserta_1',
-          'populate[5]': 'peserta_2',
-          'populate[6]': 'pemenang',
-          'populate[7]': 'event',
-        };
-        if (eventId.isNotEmpty) {
-          params['filters[event][documentId][\$eq]'] = eventId;
-        }
+      debugPrint('Total jadwals fetched from Strapi: ${allJadwals.length}');
 
-        final response = await _api.findProtect('jadwals', params: params);
-        final data = response['data'] as List? ?? [];
-        allJadwals =
-            data.map((e) => Jadwal.fromJson(e as Map<String, dynamic>)).toList();
-      }
-
-      // 3. Filter matches for current Gelanggang
-      final targetDocId = gelanggang.documentId ?? '';
-      final targetId = gelanggang.id?.toString() ?? '';
-      final targetKode =
-          (gelanggang.kodeGelanggang ?? '').toLowerCase().trim();
+      // Filter matches for the active gelanggang
+      final targetKode = (gelanggang.kodeGelanggang ?? '').toLowerCase().trim();
+      final targetKeterangan = (gelanggang.keterangan ?? '').toLowerCase().trim();
 
       List<Jadwal> arenaMatches = allJadwals.where((j) {
         if (j.gelanggang == null) return false;
@@ -73,16 +49,28 @@ class JadwalListNotifier extends StateNotifier<AsyncValue<List<Jadwal>>> {
         final gDocId = g.documentId ?? '';
         final gId = g.id?.toString() ?? '';
         final gKode = (g.kodeGelanggang ?? '').toLowerCase().trim();
+        final gKet = (g.keterangan ?? '').toLowerCase().trim();
 
-        return (targetDocId.isNotEmpty && gDocId == targetDocId) ||
-            (targetId.isNotEmpty && gId == targetId) ||
-            (targetKode.isNotEmpty && gKode == targetKode) ||
-            (targetKode.isNotEmpty && gKode.contains(targetKode));
+        final matchDoc = targetDocId.isNotEmpty && (gDocId == targetDocId || gDocId.contains(targetDocId));
+        final matchId = targetId.isNotEmpty && gId == targetId;
+        final matchKode = targetKode.isNotEmpty && (gKode == targetKode || gKode.contains(targetKode));
+        final matchKet = targetKeterangan.isNotEmpty && (gKet == targetKeterangan || gKet.contains(targetKeterangan));
+
+        return matchDoc || matchId || matchKode || matchKet;
       }).toList();
 
-      // Fallback: if no arena-specific matches, show all so operator still has access
+      // If no specific match was tagged with this specific gelanggang,
+      // fallback to showing all event matches so the operator can always select!
       if (arenaMatches.isEmpty) {
-        arenaMatches = allJadwals;
+        if (eventDocId.isNotEmpty) {
+          final eventMatches = allJadwals.where((j) {
+            final eDoc = j.event?.documentId ?? j.event?.id?.toString() ?? '';
+            return eDoc == eventDocId || eDoc.isEmpty;
+          }).toList();
+          arenaMatches = eventMatches.isNotEmpty ? eventMatches : allJadwals;
+        } else {
+          arenaMatches = allJadwals;
+        }
       }
 
       // Sort by nomor_partai ascending
@@ -92,6 +80,7 @@ class JadwalListNotifier extends StateNotifier<AsyncValue<List<Jadwal>>> {
         return aNum.compareTo(bNum);
       });
 
+      debugPrint('Final filtered arena matches: ${arenaMatches.length}');
       state = AsyncValue.data(arenaMatches);
     } catch (e, st) {
       debugPrint('Error fetching operator jadwal: $e');

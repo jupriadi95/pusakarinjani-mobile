@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
         route: '/verify/operator',
       ),
       _RoleData(
-        title: 'Wasit Juri',
+        title: 'Juri Pertandingan',
         subtitle: 'Input Nilai & Pelanggaran',
         description:
             'Konsol penilaian juri real-time untuk poin pukulan & tendangan.',

@@ -6,7 +6,7 @@ import '../models/gelanggang.dart';
 import '../models/nilai.dart';
 
 /// Socket Service — manages WebSocket connection via Socket.io.
-/// Replicates the socket.io setup from Nuxt's juri and monitor pages.
+/// Handles real-time scoring, jury consensus voting, KP discipline state, and Dewan Verification workflow.
 class SocketService {
   io.Socket? _socket;
   bool _isConnected = false;
@@ -16,6 +16,24 @@ class SocketService {
   final _gelanggangUpdatedController = StreamController<Gelanggang>.broadcast();
   final _nilaiCreatedController = StreamController<Nilai>.broadcast();
 
+  // ── Jury consensus voting events ──
+  final _juriVoteBufferedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _juriVoteConfirmController = StreamController<Map<String, dynamic>>.broadcast();
+  final _juriVoteRejectedController = StreamController<Map<String, dynamic>>.broadcast();
+
+  // ── KP discipline & match status events ──
+  final _kpStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _pesertaDsqController = StreamController<Map<String, dynamic>>.broadcast();
+  final _skorUpdateController = StreamController<Map<String, dynamic>>.broadcast();
+
+  // ── Dewan Verification (Jatuhan & Pelanggaran) events ──
+  final _verifikasiMulaiController = StreamController<Map<String, dynamic>>.broadcast();
+  final _verifikasiVoteController = StreamController<Map<String, dynamic>>.broadcast();
+  final _verifikasiSelesaiController = StreamController<Map<String, dynamic>>.broadcast();
+
+  // ── Match Timer Synchronized Control events (Mulai, Jeda/Pause, Lanjut/Resume, Reset) ──
+  final _timerControlController = StreamController<Map<String, dynamic>>.broadcast();
+
   /// Stream of connection status changes
   Stream<bool> get onConnectionChanged => _connectionController.stream;
 
@@ -24,6 +42,36 @@ class SocketService {
 
   /// Stream of new nilai created (from 'nilai:created' event)
   Stream<Nilai> get onNilaiCreated => _nilaiCreatedController.stream;
+
+  /// Stream of buffered jury vote (waiting for 2nd/3rd jury)
+  Stream<Map<String, dynamic>> get onJuriVoteBuffered => _juriVoteBufferedController.stream;
+
+  /// Stream of confirmed jury vote (2+ jury consensus reached)
+  Stream<Map<String, dynamic>> get onJuriVoteConfirm => _juriVoteConfirmController.stream;
+
+  /// Stream of rejected jury vote (consensus window expired without agreement)
+  Stream<Map<String, dynamic>> get onJuriVoteRejected => _juriVoteRejectedController.stream;
+
+  /// Stream of KP status updates (binaan, teguran, pembinaan counts)
+  Stream<Map<String, dynamic>> get onKpStatus => _kpStatusController.stream;
+
+  /// Stream of athlete disqualification alerts
+  Stream<Map<String, dynamic>> get onPesertaDsq => _pesertaDsqController.stream;
+
+  /// Stream of live scoreboard updates
+  Stream<Map<String, dynamic>> get onSkorUpdate => _skorUpdateController.stream;
+
+  /// Stream of Dewan verification start event
+  Stream<Map<String, dynamic>> get onVerifikasiMulai => _verifikasiMulaiController.stream;
+
+  /// Stream of Juri verification vote cast event
+  Stream<Map<String, dynamic>> get onVerifikasiVote => _verifikasiVoteController.stream;
+
+  /// Stream of Dewan verification completed/consensus result event
+  Stream<Map<String, dynamic>> get onVerifikasiSelesai => _verifikasiSelesaiController.stream;
+
+  /// Stream of Match Timer Control events (Mulai, Jeda/Pause, Lanjut/Resume, Reset)
+  Stream<Map<String, dynamic>> get onTimerControl => _timerControlController.stream;
 
   /// Whether currently connected
   bool get isConnected => _isConnected;
@@ -69,7 +117,7 @@ class SocketService {
       _connectionController.add(false);
     });
 
-    // Listen for gelanggang updates (operator changes status)
+    // ── Gelanggang status updates ──
     _socket!.on('gelanggang:updated', (data) {
       debugPrint('[Socket] gelanggang:updated received');
       try {
@@ -82,16 +130,137 @@ class SocketService {
       }
     });
 
-    // Listen for new nilai (juri adds score)
+    // ── Score created & confirmed events ──
     _socket!.on('nilai:created', (data) {
-      debugPrint('[Socket] nilai:created received');
+      debugPrint('[Socket] nilai:created received: $data');
       try {
         if (data is Map<String, dynamic>) {
           final nilai = Nilai.fromJson(data);
           _nilaiCreatedController.add(nilai);
+        } else if (data is Map) {
+          final nilai = Nilai.fromJson(Map<String, dynamic>.from(data));
+          _nilaiCreatedController.add(nilai);
         }
       } catch (e) {
-        debugPrint('[Socket] Error parsing nilai: $e');
+        debugPrint('[Socket] Error parsing nilai:created: $e');
+      }
+    });
+
+    _socket!.on('nilai:sah', (data) {
+      debugPrint('[Socket] nilai:sah received: $data');
+      try {
+        if (data is Map<String, dynamic>) {
+          final nilai = Nilai.fromJson(data);
+          _nilaiCreatedController.add(nilai);
+        } else if (data is Map) {
+          final nilai = Nilai.fromJson(Map<String, dynamic>.from(data));
+          _nilaiCreatedController.add(nilai);
+        }
+      } catch (e) {
+        debugPrint('[Socket] Error parsing nilai:sah: $e');
+      }
+    });
+
+    // ── Juri consensus voting events ──
+    _socket!.on('juri:vote:buffered', (data) {
+      debugPrint('[Socket] juri:vote:buffered received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriVoteBufferedController.add(data);
+      } else if (data is Map) {
+        _juriVoteBufferedController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('juri:vote:confirm', (data) {
+      debugPrint('[Socket] juri:vote:confirm received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriVoteConfirmController.add(data);
+      } else if (data is Map) {
+        _juriVoteConfirmController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('juri:vote:rejected', (data) {
+      debugPrint('[Socket] juri:vote:rejected received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriVoteRejectedController.add(data);
+      } else if (data is Map) {
+        _juriVoteRejectedController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // ── KP discipline & match events ──
+    _socket!.on('kp:status', (data) {
+      debugPrint('[Socket] kp:status received: $data');
+      if (data is Map<String, dynamic>) {
+        _kpStatusController.add(data);
+      } else if (data is Map) {
+        _kpStatusController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('peserta:dsq', (data) {
+      debugPrint('[Socket] peserta:dsq received: $data');
+      if (data is Map<String, dynamic>) {
+        _pesertaDsqController.add(data);
+      } else if (data is Map) {
+        _pesertaDsqController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('skor:update', (data) {
+      debugPrint('[Socket] skor:update received: $data');
+      if (data is Map<String, dynamic>) {
+        _skorUpdateController.add(data);
+      } else if (data is Map) {
+        _skorUpdateController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // ── Dewan Verification (Jatuhan / Pelanggaran) events ──
+    _socket!.on('verifikasi:mulai', (data) {
+      debugPrint('[Socket] verifikasi:mulai received: $data');
+      if (data is Map<String, dynamic>) {
+        _verifikasiMulaiController.add(data);
+      } else if (data is Map) {
+        _verifikasiMulaiController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('verifikasi:jatuhan', (data) {
+      debugPrint('[Socket] verifikasi:jatuhan received: $data');
+      if (data is Map<String, dynamic>) {
+        _verifikasiMulaiController.add(data);
+      } else if (data is Map) {
+        _verifikasiMulaiController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('verifikasi:vote', (data) {
+      debugPrint('[Socket] verifikasi:vote received: $data');
+      if (data is Map<String, dynamic>) {
+        _verifikasiVoteController.add(data);
+      } else if (data is Map) {
+        _verifikasiVoteController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('verifikasi:selesai', (data) {
+      debugPrint('[Socket] verifikasi:selesai received: $data');
+      if (data is Map<String, dynamic>) {
+        _verifikasiSelesaiController.add(data);
+      } else if (data is Map) {
+        _verifikasiSelesaiController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // ── Timer Control Sync events (Mulai, Jeda/Pause, Lanjut/Resume, Reset) ──
+    _socket!.on('timer:control', (data) {
+      debugPrint('[Socket] timer:control received: $data');
+      if (data is Map<String, dynamic>) {
+        _timerControlController.add(data);
+      } else if (data is Map) {
+        _timerControlController.add(Map<String, dynamic>.from(data));
       }
     });
 
@@ -103,6 +272,67 @@ class SocketService {
     if (_socket != null && _isConnected) {
       _socket!.emit('join:gelanggang', documentId);
       debugPrint('[Socket] Joined gelanggang room: $documentId');
+    }
+  }
+
+  /// Emit jury vote event to server for real-time 2-out-of-3 consensus evaluation
+  void emitJuriVote(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('juri:vote', payload);
+      debugPrint('[Socket] Emitted juri:vote -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit juri:vote: not connected');
+    }
+  }
+
+  /// Emit KP action event to server for discipline penalties or bonuses
+  void emitKpAction(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('kp:action', payload);
+      debugPrint('[Socket] Emitted kp:action -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit kp:action: not connected');
+    }
+  }
+
+  /// Emit Dewan Verification Start event (Verifikasi Jatuhan / Pelanggaran)
+  void emitVerifikasiMulai(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('verifikasi:mulai', payload);
+      _socket!.emit('verifikasi:jatuhan', payload); // Emit alias for broad compatibility
+      debugPrint('[Socket] Emitted verifikasi:mulai -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit verifikasi:mulai: not connected');
+    }
+  }
+
+  /// Emit Juri Verification Vote event
+  void emitVerifikasiVote(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('verifikasi:vote', payload);
+      debugPrint('[Socket] Emitted verifikasi:vote -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit verifikasi:vote: not connected');
+    }
+  }
+
+  /// Emit Dewan Verification Completed / Consensus Result event
+  void emitVerifikasiSelesai(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('verifikasi:selesai', payload);
+      debugPrint('[Socket] Emitted verifikasi:selesai -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit verifikasi:selesai: not connected');
+    }
+  }
+
+  /// Emit Match Timer Synchronized Control event (Mulai, Jeda/Pause, Lanjut/Resume, Reset)
+  void emitTimerControl(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('timer:control', payload);
+      debugPrint('[Socket] Emitted timer:control -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit timer:control: not connected');
     }
   }
 
@@ -120,5 +350,15 @@ class SocketService {
     _connectionController.close();
     _gelanggangUpdatedController.close();
     _nilaiCreatedController.close();
+    _juriVoteBufferedController.close();
+    _juriVoteConfirmController.close();
+    _juriVoteRejectedController.close();
+    _kpStatusController.close();
+    _pesertaDsqController.close();
+    _skorUpdateController.close();
+    _verifikasiMulaiController.close();
+    _verifikasiVoteController.close();
+    _verifikasiSelesaiController.close();
+    _timerControlController.close();
   }
 }

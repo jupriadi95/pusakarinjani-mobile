@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/theme.dart';
 import '../../models/gelanggang.dart';
 import '../../services/api_service.dart';
@@ -23,6 +24,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   String _code = '';
   bool _isLoading = false;
   bool _isScanMode = false;
+  String _selectedJuriId = 'juri_1';
   final TextEditingController _pinController = TextEditingController();
 
   @override
@@ -33,6 +35,23 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+    if (widget.destination == 'juri') {
+      _loadJuriId();
+    }
+  }
+
+  Future<void> _loadJuriId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('saved_juri_id');
+    if (saved != null && ['juri_1', 'juri_2', 'juri_3'].contains(saved)) {
+      if (mounted) setState(() => _selectedJuriId = saved);
+    }
+  }
+
+  Future<void> _setJuriId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_juri_id', id);
+    if (mounted) setState(() => _selectedJuriId = id);
   }
 
   @override
@@ -42,8 +61,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   }
 
   final _roleTitleMap = const {
-    'operator': 'Dewan Pertandingan',
-    'juri': 'Wasit Juri',
+    'operator': 'Dewan Pertandingan (KP)',
+    'juri': 'Juri Pertandingan',
     'monitor': 'Monitoring Nilai Live',
   };
 
@@ -255,6 +274,40 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                             ),
                           ),
 
+                          // Juri Selection Bar (when destination is 'juri')
+                          if (widget.destination == 'juri') ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: PusakaTheme.slate950,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: PusakaTheme.slate800),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4, bottom: 6),
+                                    child: Text(
+                                      'Pilih Posisi Juri Anda:',
+                                      style: TextStyle(color: PusakaTheme.slate400, fontSize: 10, fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      _buildJuriOption('Juri 1', 'juri_1'),
+                                      const SizedBox(width: 6),
+                                      _buildJuriOption('Juri 2', 'juri_2'),
+                                      const SizedBox(width: 6),
+                                      _buildJuriOption('Juri 3', 'juri_3'),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
                           const SizedBox(height: 20),
 
                           // Mode Selector Switch (Ketik OTP / Scan QR)
@@ -329,7 +382,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Stable IndexedStack for input modes (prevents framework assertion error _dependents.isEmpty)
+                          // Stable IndexedStack for input modes
                           IndexedStack(
                             index: _isScanMode ? 1 : 0,
                             children: [
@@ -450,12 +503,13 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                                       const SizedBox(width: 8),
                                       Text(
                                         _isLoading
-                                            ? 'Memverifikasi Kode...'
-                                            : 'Verifikasi & Lanjutkan',
+                                            ? 'MEMVERIFIKASI...'
+                                            : 'VERIFIKASI & MASUK',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1,
                                         ),
                                       ),
                                     ],
@@ -469,21 +523,49 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
 
                     const Spacer(),
 
-                    // Footer
-                    const Text(
-                      'Sistem Manajemen Arena Gelanggang Pencak Silat © 2026',
+                    // Help text
+                    Text(
+                      'Pastikan Anda mendapatkan kode gelanggang arena 8 digit resmi dari panitia.',
                       style: TextStyle(
-                        color: PusakaTheme.slate500,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
+                        color: PusakaTheme.slate500.withValues(alpha: 0.8),
+                        fontSize: 11,
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJuriOption(String label, String id) {
+    final isSelected = _selectedJuriId == id;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _setJuriId(id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? PusakaTheme.indigo600 : PusakaTheme.slate900,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? PusakaTheme.indigo400 : PusakaTheme.slate800,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : PusakaTheme.slate400,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -15,6 +15,7 @@ class PusakaTheme {
   static const Color slate500 = Color(0xFF64748B);
   static const Color slate400 = Color(0xFF94A3B8);
   static const Color slate300 = Color(0xFFCBD5E1);
+  static const Color slate200 = Color(0xFFE2E8F0);
 
   static const Color indigo950 = Color(0xFF1E1B4B);
   static const Color indigo700 = Color(0xFF4338CA);
@@ -25,6 +26,10 @@ class PusakaTheme {
 
   static const Color amber400 = Color(0xFFFBBF24);
   static const Color amber500 = Color(0xFFF59E0B);
+  static const Color amber950 = Color(0xFF451A03);
+
+  static const Color orange400 = Color(0xFFFB923C);
+  static const Color orange500 = Color(0xFFF97316);
 
   static const Color emerald400 = Color(0xFF34D399);
   static const Color emerald500 = Color(0xFF10B981);
@@ -35,6 +40,7 @@ class PusakaTheme {
   static const Color rose500 = Color(0xFFF43F5E);
   static const Color rose600 = Color(0xFFE11D48);
   static const Color rose800 = Color(0xFF9F1239);
+  static const Color rose900 = Color(0xFF881337);
   static const Color rose950 = Color(0xFF4C0519);
 
   static const Color red600 = Color(0xFFDC2626);
@@ -66,6 +72,10 @@ class PusakaTheme {
   );
 
   static const LinearGradient roseGradient = LinearGradient(
+    colors: [rose600, red600],
+  );
+
+  static const LinearGradient redGradient = LinearGradient(
     colors: [rose600, red600],
   );
 
