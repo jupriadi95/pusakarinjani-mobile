@@ -27,10 +27,13 @@ jobs:
       - name: Build macOS
         run: flutter build macos --release
 
+      - name: Check build output
+        run: ls -lah build/macos/Build/Products/Release
+
       - name: Create ZIP
         run: |
           cd build/macos/Build/Products/Release
-          zip -r Pusaka-Rinjani-macOS.zip Runner.app
+          zip -r Pusaka-Rinjani-macOS-Intel.zip *.app
 
       - name: Upload macOS Build
         uses: actions/upload-artifact@v4
