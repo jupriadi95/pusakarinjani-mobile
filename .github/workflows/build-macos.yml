@@ -1,10 +1,6 @@
 name: Build Pusaka Rinjani macOS
 
 on:
-  push:
-    branches:
-      - master
-
   workflow_dispatch:
 
 jobs:
@@ -23,12 +19,19 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
       - name: Build macOS
         run: flutter build macos --release
 
-      - name: Check build output
-        run: ls -lah build/macos/Build/Products/Release
+      - name: Check macOS build output
+        run: |
+          echo "=== Build directory ==="
+          ls -lah build/macos/Build/Products/Release
+
+          echo "=== Find APP ==="
+          find build/macos -name "*.app" -maxdepth 10
+
+          echo "=== Find ZIP ==="
+          find build/macos -name "*.zip" -maxdepth 10
 
       - name: Create ZIP
         run: |
@@ -38,5 +41,5 @@ jobs:
       - name: Upload macOS Build
         uses: actions/upload-artifact@v4
         with:
-          name: Pusaka-Rinjani-macOS
-          path: build/macos/Build/Products/Release/Pusaka-Rinjani-macOS.zip
+          name: Pusaka-Rinjani-macOS-Intel
+          path: build/macos/Build/Products/Release/Pusaka-Rinjani-macOS-Intel.zip
