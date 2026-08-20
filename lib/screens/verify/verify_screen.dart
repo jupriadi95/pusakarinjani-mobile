@@ -413,10 +413,14 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                                       controller: _pinController,
                                       length: 8,
                                       onChanged: (value) {
-                                        _code = value;
+                                        setState(() {
+                                          _code = value;
+                                        });
                                       },
                                       onCompleted: (value) {
-                                        _code = value;
+                                        setState(() {
+                                          _code = value;
+                                        });
                                       },
                                       pinTheme: PinTheme(
                                         shape: PinCodeFieldShape.box,
@@ -459,64 +463,83 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Verify Button
-                          if (_code.isNotEmpty && !_isScanMode)
-                            SizedBox(
-                              width: double.infinity,
-                              child: GestureDetector(
-                                onTap: _isLoading ? null : _verifyCode,
-                                child: Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  decoration: BoxDecoration(
-                                    gradient: PusakaTheme.indigoGradient,
-                                    borderRadius: BorderRadius.circular(
-                                        PusakaTheme.radiusMd),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: PusakaTheme.indigo600
-                                            .withValues(alpha: 0.3),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      if (_isLoading)
-                                        const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
+                          // Verify Button (Always visible in OTP mode, disabled if < 8 digits)
+                          if (!_isScanMode) ...[
+                            Builder(
+                              builder: (context) {
+                                final isOtpFull = _code.trim().length == 8;
+                                final isEnabled = isOtpFull && !_isLoading;
+
+                                return SizedBox(
+                                  width: double.infinity,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 200),
+                                    opacity: isEnabled ? 1.0 : 0.45,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: isEnabled ? _verifyCode : null,
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        decoration: BoxDecoration(
+                                          gradient: isEnabled ? PusakaTheme.indigoGradient : null,
+                                          color: isEnabled ? null : PusakaTheme.slate900,
+                                          borderRadius: BorderRadius.circular(PusakaTheme.radiusMd),
+                                          border: Border.all(
+                                            color: isEnabled
+                                                ? PusakaTheme.indigo400
+                                                : PusakaTheme.slate800,
+                                            width: isEnabled ? 1.4 : 1.0,
                                           ),
-                                        )
-                                      else
-                                        const Icon(
-                                            Icons.check_circle_outline,
-                                            color: Colors.white,
-                                            size: 16),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _isLoading
-                                            ? 'MEMVERIFIKASI...'
-                                            : 'VERIFIKASI & MASUK',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 1,
+                                          boxShadow: isEnabled
+                                              ? [
+                                                  BoxShadow(
+                                                    color: PusakaTheme.indigo600.withValues(alpha: 0.35),
+                                                    blurRadius: 12,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ]
+                                              : null,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            if (_isLoading)
+                                              const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                ),
+                                              )
+                                            else
+                                              Icon(
+                                                isEnabled ? Icons.check_circle_outline : Icons.lock_outline_rounded,
+                                                color: isEnabled ? Colors.white : PusakaTheme.slate500,
+                                                size: 16,
+                                              ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              _isLoading
+                                                  ? 'MEMVERIFIKASI...'
+                                                  : 'VERIFIKASI & MASUK',
+                                              style: TextStyle(
+                                                color: isEnabled ? Colors.white : PusakaTheme.slate500,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 1,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
+                          ],
                         ],
                       ),
                     ),

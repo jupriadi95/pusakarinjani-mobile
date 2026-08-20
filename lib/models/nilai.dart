@@ -43,7 +43,7 @@ class Nilai {
         case 'tendangan':
           return 'Tendangan (+2)';
         case 'jatuhan':
-          return 'Jatuhan (+3)';
+          return (jumlah != null && jumlah! < 0) ? 'Batal Jatuhan ($jumlah)' : 'Jatuhan (+3)';
         case 'batal_jatuhan':
           return 'Batal Jatuhan (-3)';
         case 'binaan':
@@ -82,14 +82,25 @@ class Nilai {
   }
 
   factory Nilai.fromJson(Map<String, dynamic> json) {
+    Peserta? resolvedPeserta;
+    if (json['peserta'] != null) {
+      if (json['peserta'] is Map<String, dynamic>) {
+        resolvedPeserta = Peserta.fromJson(json['peserta'] as Map<String, dynamic>);
+      } else if (json['peserta'] is Map) {
+        resolvedPeserta = Peserta.fromJson(Map<String, dynamic>.from(json['peserta'] as Map));
+      } else if (json['peserta'] is String || json['peserta'] is int) {
+        final idStr = json['peserta'].toString();
+        resolvedPeserta = Peserta(id: int.tryParse(idStr), documentId: idStr);
+      }
+    } else if (json['atlet_id'] != null || json['atletId'] != null || json['peserta_id'] != null) {
+      final idStr = (json['atlet_id'] ?? json['atletId'] ?? json['peserta_id']).toString();
+      resolvedPeserta = Peserta(id: int.tryParse(idStr), documentId: idStr);
+    }
+
     return Nilai(
       id: json['id'] as int?,
       documentId: json['documentId'] as String?,
-      peserta: json['peserta'] != null
-          ? (json['peserta'] is Map<String, dynamic>
-              ? Peserta.fromJson(json['peserta'] as Map<String, dynamic>)
-              : null)
-          : null,
+      peserta: resolvedPeserta,
       jumlah: json['jumlah'] as int?,
       menitKe: json['menit_ke'] as String?,
       jenis: json['jenis'] as String?,

@@ -26,6 +26,9 @@ class SocketService {
   final _pesertaDsqController = StreamController<Map<String, dynamic>>.broadcast();
   final _skorUpdateController = StreamController<Map<String, dynamic>>.broadcast();
 
+  // ── KP nilai persisted via REST — broadcast to all screens for realtime sync ──
+  final _nilaiKpController = StreamController<Map<String, dynamic>>.broadcast();
+
   // ── Dewan Verification (Jatuhan & Pelanggaran) events ──
   final _verifikasiMulaiController = StreamController<Map<String, dynamic>>.broadcast();
   final _verifikasiVoteController = StreamController<Map<String, dynamic>>.broadcast();
@@ -33,6 +36,12 @@ class SocketService {
 
   // ── Match Timer Synchronized Control events (Mulai, Jeda/Pause, Lanjut/Resume, Reset) ──
   final _timerControlController = StreamController<Map<String, dynamic>>.broadcast();
+
+  // ── Match Completion / Finished events ──
+  final _pertandinganSelesaiController = StreamController<Map<String, dynamic>>.broadcast();
+
+  /// Stream of match completion events
+  Stream<Map<String, dynamic>> get onPertandinganSelesai => _pertandinganSelesaiController.stream;
 
   /// Stream of connection status changes
   Stream<bool> get onConnectionChanged => _connectionController.stream;
@@ -55,6 +64,9 @@ class SocketService {
   /// Stream of KP status updates (binaan, teguran, pembinaan counts)
   Stream<Map<String, dynamic>> get onKpStatus => _kpStatusController.stream;
 
+  /// Stream of KP nilai that were persisted via REST API (negative deductions broadcast)
+  Stream<Map<String, dynamic>> get onNilaiKp => _nilaiKpController.stream;
+
   /// Stream of athlete disqualification alerts
   Stream<Map<String, dynamic>> get onPesertaDsq => _pesertaDsqController.stream;
 
@@ -72,6 +84,11 @@ class SocketService {
 
   /// Stream of Match Timer Control events (Mulai, Jeda/Pause, Lanjut/Resume, Reset)
   Stream<Map<String, dynamic>> get onTimerControl => _timerControlController.stream;
+
+  final _babakChangedController = StreamController<Map<String, dynamic>>.broadcast();
+
+  /// Stream of Babak / Round change events (Babak 1, Babak 2, Babak 3)
+  Stream<Map<String, dynamic>> get onBabakChanged => _babakChangedController.stream;
 
   /// Whether currently connected
   bool get isConnected => _isConnected;
@@ -218,6 +235,7 @@ class SocketService {
     });
 
     // ── Dewan Verification (Jatuhan / Pelanggaran) events ──
+    // Only listen to 'verifikasi:mulai' — removed 'verifikasi:jatuhan' alias to prevent double-fire
     _socket!.on('verifikasi:mulai', (data) {
       debugPrint('[Socket] verifikasi:mulai received: $data');
       if (data is Map<String, dynamic>) {
@@ -227,12 +245,13 @@ class SocketService {
       }
     });
 
-    _socket!.on('verifikasi:jatuhan', (data) {
-      debugPrint('[Socket] verifikasi:jatuhan received: $data');
+    // ── KP nilai persisted — broadcast to Monitor/Juri for realtime sync ──
+    _socket!.on('nilai:kp', (data) {
+      debugPrint('[Socket] nilai:kp received: $data');
       if (data is Map<String, dynamic>) {
-        _verifikasiMulaiController.add(data);
+        _nilaiKpController.add(data);
       } else if (data is Map) {
-        _verifikasiMulaiController.add(Map<String, dynamic>.from(data));
+        _nilaiKpController.add(Map<String, dynamic>.from(data));
       }
     });
 
@@ -261,6 +280,26 @@ class SocketService {
         _timerControlController.add(data);
       } else if (data is Map) {
         _timerControlController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // ── Babak / Round Change events (Babak 1, Babak 2, Babak 3) ──
+    _socket!.on('babak:change', (data) {
+      debugPrint('[Socket] babak:change received: $data');
+      if (data is Map<String, dynamic>) {
+        _babakChangedController.add(data);
+      } else if (data is Map) {
+        _babakChangedController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // ── Match Completion / Finished events ──
+    _socket!.on('pertandingan:selesai', (data) {
+      debugPrint('[Socket] pertandingan:selesai received: $data');
+      if (data is Map<String, dynamic>) {
+        _pertandinganSelesaiController.add(data);
+      } else if (data is Map) {
+        _pertandinganSelesaiController.add(Map<String, dynamic>.from(data));
       }
     });
 
@@ -299,10 +338,19 @@ class SocketService {
   void emitVerifikasiMulai(Map<String, dynamic> payload) {
     if (_socket != null && _isConnected) {
       _socket!.emit('verifikasi:mulai', payload);
-      _socket!.emit('verifikasi:jatuhan', payload); // Emit alias for broad compatibility
       debugPrint('[Socket] Emitted verifikasi:mulai -> $payload');
     } else {
       debugPrint('[Socket] Cannot emit verifikasi:mulai: not connected');
+    }
+  }
+
+  /// Emit nilai:kp event — broadcast KP score deduction to Monitor/Juri screens
+  void emitNilaiKp(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('nilai:kp', payload);
+      debugPrint('[Socket] Emitted nilai:kp -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit nilai:kp: not connected');
     }
   }
 
@@ -336,6 +384,26 @@ class SocketService {
     }
   }
 
+  /// Emit Match Completion / Selesai event
+  void emitPertandinganSelesai(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('pertandingan:selesai', payload);
+      debugPrint('[Socket] Emitted pertandingan:selesai -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit pertandingan:selesai: not connected');
+    }
+  }
+
+  /// Emit Babak / Round Change event (Babak 1, Babak 2, Babak 3)
+  void emitBabakChange(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('babak:change', payload);
+      debugPrint('[Socket] Emitted babak:change -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit babak:change: not connected');
+    }
+  }
+
   /// Disconnect and clean up
   void disconnect() {
     _socket?.dispose();
@@ -360,5 +428,8 @@ class SocketService {
     _verifikasiVoteController.close();
     _verifikasiSelesaiController.close();
     _timerControlController.close();
+    _babakChangedController.close();
+    _pertandinganSelesaiController.close();
+    _nilaiKpController.close();
   }
 }

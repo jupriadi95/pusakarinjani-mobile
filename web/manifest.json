@@ -1,14 +1,19 @@
 {
-    "name": "pusaka",
-    "short_name": "pusaka",
+    "name": "PUSAKA Scoring Arena",
+    "short_name": "PUSAKA",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#030712",
+    "theme_color": "#030712",
+    "description": "PUSAKA Digital Scoring & Tournament Arena Management",
+    "orientation": "landscape-primary",
     "prefer_related_applications": false,
     "icons": [
+        {
+            "src": "assets/img/icon.webp",
+            "sizes": "512x512",
+            "type": "image/webp"
+        },
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",

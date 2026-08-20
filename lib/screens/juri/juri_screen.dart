@@ -8,8 +8,8 @@ import '../../models/gelanggang.dart';
 import '../../models/peserta.dart';
 import '../../providers/gelanggang_provider.dart';
 import '../../providers/jadwal_provider.dart';
+import '../../providers/socket_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/socket_service.dart';
 import '../../widgets/connection_badge.dart';
 import '../../widgets/standby_screen.dart';
 
@@ -27,7 +27,7 @@ class JuriScreen extends ConsumerStatefulWidget {
 }
 
 class _JuriScreenState extends ConsumerState<JuriScreen> {
-  final _socketService = SocketService();
+  late final SocketService _socketService;
   final _api = ApiService();
 
   bool _isConnected = false;
@@ -48,6 +48,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   String? _myVerifikasiVote;
   String? _verifikasiFinalVerdict;
   StateSetter? _verifikasiDialogSetState;
+  String? _liveBabakOverride;
 
   StreamSubscription? _connectionSub;
   StreamSubscription? _gelanggangSub;
@@ -56,10 +57,15 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   StreamSubscription? _voteRejectedSub;
   StreamSubscription? _verifikasiMulaiSub;
   StreamSubscription? _verifikasiSelesaiSub;
+  StreamSubscription? _babakChangedSub;
+  StreamSubscription? _timerControlSub;
+  StreamSubscription? _pertandinganSelesaiSub;
 
   @override
   void initState() {
     super.initState();
+    // Resolve shared singleton socket service
+    _socketService = ref.read(socketServiceProvider);
     // Force landscape for juri console (optimized for touch scoring)
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -168,6 +174,46 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
         }
       });
     });
+
+    // ── Babak / Round Change Sync Listener ──
+    _babakChangedSub = _socketService.onBabakChanged.listen((data) {
+      if (!mounted) return;
+      final babak = data['babak']?.toString();
+      if (babak != null && babak.isNotEmpty) {
+        setState(() {
+          _liveBabakOverride = babak;
+        });
+      }
+    });
+
+    // ── Timer Control Sync Listener (Start -> Scoring Console, Stop -> Standby) ──
+    _timerControlSub = _socketService.onTimerControl.listen((data) {
+      if (!mounted) return;
+      final action = data['action']?.toString();
+      if (action == 'stop') {
+        setState(() {
+          if (_gelanggang != null) {
+            _gelanggang = _gelanggang!.copyWith(statusTanding: 'standby');
+          }
+        });
+      } else if (action == 'start') {
+        setState(() {
+          if (_gelanggang != null) {
+            _gelanggang = _gelanggang!.copyWith(statusTanding: 'berlangsung');
+          }
+        });
+      }
+    });
+
+    // ── Match Completion / Finished Listener ──
+    _pertandinganSelesaiSub = _socketService.onPertandinganSelesai.listen((data) {
+      if (!mounted) return;
+      setState(() {
+        if (_gelanggang != null) {
+          _gelanggang = _gelanggang!.copyWith(statusTanding: 'standby');
+        }
+      });
+    });
   }
 
   void _showVoteBanner(VoteStatusType type, String message, {int durationMs = 1500}) {
@@ -223,6 +269,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
   /// Resolve current active match round (babak)
   String _resolveActiveBabak() {
+    if (_liveBabakOverride != null && _liveBabakOverride!.isNotEmpty) {
+      return _liveBabakOverride!;
+    }
     final list = ref.read(jadwalListProvider).valueOrNull ?? [];
     if (list.isEmpty) return '1';
 
@@ -697,7 +746,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     _voteRejectedSub?.cancel();
     _verifikasiMulaiSub?.cancel();
     _verifikasiSelesaiSub?.cancel();
-    _socketService.disconnect();
+    _babakChangedSub?.cancel();
+    _timerControlSub?.cancel();
+    _pertandinganSelesaiSub?.cancel();
+    // Do NOT call _socketService.disconnect() — socket is a shared singleton via Riverpod provider
     // Restore orientation
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
