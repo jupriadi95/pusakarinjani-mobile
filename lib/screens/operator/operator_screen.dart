@@ -30,7 +30,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
   bool _isConnected = false;
   bool _tandingStatus = false;
-  Peserta? _atlitBiru;  // Sudut Biru (Left)
+  Peserta? _atlitBiru; // Sudut Biru (Left)
   Peserta? _atlitMerah; // Sudut Merah (Right)
   Jadwal? _selectedJadwal;
   String _activeBabak = '1'; // Active Round: '1', '2', or '3'
@@ -90,7 +90,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       if (gelanggang.isBerlangsung) {
         _fetchPeserta(gelanggang.atlit1Id ?? '', 1); // atlit1 = Biru
         _fetchPeserta(gelanggang.atlit2Id ?? '', 2); // atlit2 = Merah
-        ref.read(nilaiListProvider.notifier).fetchNilai(gelanggang.atlit1Id ?? '', gelanggang.atlit2Id ?? '');
+        ref
+            .read(nilaiListProvider.notifier)
+            .fetchNilai(gelanggang.atlit1Id ?? '', gelanggang.atlit2Id ?? '');
         _startTimer();
       }
 
@@ -112,7 +114,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         if (updated.isBerlangsung) {
           _fetchPeserta(updated.atlit1Id ?? '', 1);
           _fetchPeserta(updated.atlit2Id ?? '', 2);
-          ref.read(nilaiListProvider.notifier).fetchNilai(updated.atlit1Id ?? '', updated.atlit2Id ?? '');
+          ref
+              .read(nilaiListProvider.notifier)
+              .fetchNilai(updated.atlit1Id ?? '', updated.atlit2Id ?? '');
           _startTimer();
         } else {
           _pauseTimer();
@@ -135,15 +139,33 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           _kpTeguranBiru = 0;
         } else {
           if (data.containsKey('merah') || data['sudut'] == 'merah') {
-            _kpBinaanMerah = (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah) as int;
-            _kpTeguranMerah = (merah['teguran'] ?? merah['kp_teguran_merah'] ?? _kpTeguranMerah) as int;
-            _kpPembinaanMerah = (merah['pembinaan'] ?? merah['kp_pembinaan_merah'] ?? _kpPembinaanMerah) as int;
+            _kpBinaanMerah =
+                (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah)
+                    as int;
+            _kpTeguranMerah =
+                (merah['teguran'] ??
+                        merah['kp_teguran_merah'] ??
+                        _kpTeguranMerah)
+                    as int;
+            _kpPembinaanMerah =
+                (merah['pembinaan'] ??
+                        merah['kp_pembinaan_merah'] ??
+                        _kpPembinaanMerah)
+                    as int;
           }
 
           if (data.containsKey('biru') || data['sudut'] == 'biru') {
-            _kpBinaanBiru = (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru) as int;
-            _kpTeguranBiru = (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru) as int;
-            _kpPembinaanBiru = (biru['pembinaan'] ?? biru['kp_pembinaan_biru'] ?? _kpPembinaanBiru) as int;
+            _kpBinaanBiru =
+                (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru)
+                    as int;
+            _kpTeguranBiru =
+                (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru)
+                    as int;
+            _kpPembinaanBiru =
+                (biru['pembinaan'] ??
+                        biru['kp_pembinaan_biru'] ??
+                        _kpPembinaanBiru)
+                    as int;
           }
         }
       });
@@ -178,10 +200,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     // ── Verification Vote Listener (From Judges) ──
     _verifikasiVoteSub = _socketService.onVerifikasiVote.listen((data) {
       if (!mounted || !_verifikasiActive) return;
-      final juriId = data['juriId']?.toString() ?? data['juri_id']?.toString() ?? '';
+      final juriId =
+          data['juriId']?.toString() ?? data['juri_id']?.toString() ?? '';
       final pilihan = data['pilihan']?.toString() ?? '';
 
-      if (['juri_1', 'juri_2', 'juri_3'].contains(juriId) && pilihan.isNotEmpty) {
+      if (['juri_1', 'juri_2', 'juri_3'].contains(juriId) &&
+          pilihan.isNotEmpty) {
         setState(() {
           _verifikasiVotes[juriId] = pilihan;
         });
@@ -248,13 +272,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _matchTimer?.cancel();
   }
 
-
-
   Future<void> _handleResetBabak() async {
     final gelanggang = ref.read(activeGelanggangProvider);
     final jadwalDocId = _selectedJadwal?.documentId ?? '';
-    final atlitBiruDocId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-    final atlitMerahDocId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final atlitBiruDocId =
+        _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
+    final atlitMerahDocId =
+        _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
     final gelanggangId = gelanggang?.documentId ?? '';
 
     // 1. Reset timer & disciplinary counters locally
@@ -323,7 +347,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       }
     }
 
-    _showSnack('Babak di-reset! Timer kembali 00:00, Binaan & Teguran kembali 0.', PusakaTheme.indigo500);
+    _showSnack(
+      'Babak di-reset! Timer kembali 00:00, Binaan & Teguran kembali 0.',
+      PusakaTheme.indigo500,
+    );
   }
 
   String get _formattedTimer {
@@ -370,7 +397,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             SizedBox(width: 10),
             Text(
               'DISKUALIFIKASI (DSQ)!',
-              style: TextStyle(color: PusakaTheme.rose400, fontWeight: FontWeight.w900, fontSize: 16),
+              style: TextStyle(
+                color: PusakaTheme.rose400,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -384,8 +415,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
               _isDsqDialogOpen = false;
               Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: PusakaTheme.rose600),
-            child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: PusakaTheme.rose600,
+            ),
+            child: const Text(
+              'Tutup',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -393,8 +432,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   void _applyJadwalSelection(Jadwal j) {
-    final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString() ?? '';
-    final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString() ?? '';
+    final bId =
+        j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString() ?? '';
+    final mId =
+        j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString() ?? '';
 
     // Clear previous score state
     ref.read(nilaiListProvider.notifier).clear();
@@ -402,7 +443,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     setState(() {
       _selectedJadwal = j;
       _activeBabak = (j.babak != null && j.babak!.isNotEmpty) ? j.babak! : '1';
-      _atlitBiru = j.biruPeserta;   // Sudut Biru (Left)
+      _atlitBiru = j.biruPeserta; // Sudut Biru (Left)
       _atlitMerah = j.merahPeserta; // Sudut Merah (Right)
 
       // Sync initial KP state from jadwal
@@ -441,12 +482,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
     _socketService.emitBabakChange(payload);
 
-    if (_selectedJadwal?.documentId != null && _selectedJadwal!.documentId!.isNotEmpty) {
+    if (_selectedJadwal?.documentId != null &&
+        _selectedJadwal!.documentId!.isNotEmpty) {
       try {
         await _api.updateProtect('jadwals', _selectedJadwal!.documentId!, {
-          'data': {
-            'babak': babak,
-          },
+          'data': {'babak': babak},
         });
       } catch (e) {
         debugPrint('[Dewan] Error updating babak to Strapi: $e');
@@ -456,7 +496,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _showSnack('Babak $babak Diaktifkan!', const Color(0xFFD97706));
   }
 
-  Future<bool> _updateGelanggang(String status, String at1Id, String at2Id) async {
+  Future<bool> _updateGelanggang(
+    String status,
+    String at1Id,
+    String at2Id,
+  ) async {
     final gelanggang = ref.read(activeGelanggangProvider);
     if (gelanggang?.documentId == null) return false;
 
@@ -479,12 +523,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     final merahId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString();
 
     if (biruId == null || merahId == null) {
-      _showSnack('Pilih partai tanding atau peserta terlebih dahulu.', PusakaTheme.amber500);
+      _showSnack(
+        'Pilih partai tanding atau peserta terlebih dahulu.',
+        PusakaTheme.amber500,
+      );
       return;
     }
 
     if (biruId == merahId) {
-      _showSnack('Peserta Sudut Biru dan Merah tidak boleh sama.', PusakaTheme.amber500);
+      _showSnack(
+        'Peserta Sudut Biru dan Merah tidak boleh sama.',
+        PusakaTheme.amber500,
+      );
       return;
     }
 
@@ -532,7 +582,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       'seconds': _timerSeconds,
       'gelanggangId': ref.read(activeGelanggangProvider)?.documentId,
     });
-    _showSnack('Waktu Pertandingan Dilanjutkan (Resume)', const Color(0xFF059669));
+    _showSnack(
+      'Waktu Pertandingan Dilanjutkan (Resume)',
+      const Color(0xFF059669),
+    );
   }
 
   Future<void> _handleStop() async {
@@ -541,7 +594,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: PusakaTheme.slate900,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Selesai Tanding?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Selesai Tanding?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
         content: const Text(
           'Apakah Anda yakin ingin menyelesaikan pertandingan partai ini?',
           style: TextStyle(color: PusakaTheme.slate400),
@@ -549,11 +605,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal', style: TextStyle(color: PusakaTheme.slate400)),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: PusakaTheme.slate400),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: PusakaTheme.rose600),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: PusakaTheme.rose600,
+            ),
             child: const Text('Ya, Selesaikan'),
           ),
         ],
@@ -562,18 +623,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
     if (confirm == true) {
       final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-      final merahId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+      final merahId =
+          _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
 
       // 1. Update gelanggang status to 'standby' in Strapi (valid enum: standby, berlangsung, tutup)
       await _updateGelanggang('standby', biruId, merahId);
 
       // 2. If a specific jadwal match is active, update jadwal status to 'selesai' in Strapi
-      if (_selectedJadwal?.documentId != null && _selectedJadwal!.documentId!.isNotEmpty) {
+      if (_selectedJadwal?.documentId != null &&
+          _selectedJadwal!.documentId!.isNotEmpty) {
         try {
           await _api.updateProtect('jadwals', _selectedJadwal!.documentId!, {
-            'data': {
-              'status_tanding': 'selesai',
-            },
+            'data': {'status_tanding': 'selesai'},
           });
         } catch (e) {
           debugPrint('[Dewan] Error updating jadwal status: $e');
@@ -597,7 +658,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'atlit2Id': merahId,
       });
 
-      _showSnack('Pertandingan Selesai! Pemenang Ditampilkan di Layar Monitor.', PusakaTheme.emerald600);
+      _showSnack(
+        'Pertandingan Selesai! Pemenang Ditampilkan di Layar Monitor.',
+        PusakaTheme.emerald600,
+      );
     }
   }
 
@@ -613,12 +677,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     String? label,
   }) async {
     if (!_tandingStatus) {
-      _showSnack('Pertandingan belum dimulai! Klik MULAI terlebih dahulu.', PusakaTheme.amber500);
+      _showSnack(
+        'Pertandingan belum dimulai! Klik MULAI terlebih dahulu.',
+        PusakaTheme.amber500,
+      );
       return;
     }
 
     final now = DateTime.now();
-    if (_lastKpActionTime != null && now.difference(_lastKpActionTime!).inMilliseconds < 200) {
+    if (_lastKpActionTime != null &&
+        now.difference(_lastKpActionTime!).inMilliseconds < 200) {
       debugPrint('[Dewan] Ignored duplicate rapid tap on KP action: $aksi');
       return;
     }
@@ -626,7 +694,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
     final atlitDocId = atlit?.documentId ?? atlit?.id?.toString();
     if (atlitDocId == null || atlitDocId.isEmpty) {
-      _showSnack('Data atlet sudut ${isRed ? "MERAH" : "BIRU"} belum lengkap.', PusakaTheme.amber500);
+      _showSnack(
+        'Data atlet sudut ${isRed ? "MERAH" : "BIRU"} belum lengkap.',
+        PusakaTheme.amber500,
+      );
       return;
     }
     final gelanggang = ref.read(activeGelanggangProvider);
@@ -696,7 +767,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       }
     });
 
-    _showSnack('${label ?? aksi.toUpperCase()} sudut ${isRed ? "MERAH" : "BIRU"} dicatat', PusakaTheme.indigo500);
+    _showSnack(
+      '${label ?? aksi.toUpperCase()} sudut ${isRed ? "MERAH" : "BIRU"} dicatat',
+      PusakaTheme.indigo500,
+    );
 
     // 3. For 'batal_jatuhan' (point == -3):
     // Strapi's socket engine does not have an automatic handler for batal_jatuhan,
@@ -721,7 +795,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           },
         });
         if (res['data'] != null && res['data'] is Map) {
-          final serverNilai = Nilai.fromJson(Map<String, dynamic>.from(res['data'] as Map));
+          final serverNilai = Nilai.fromJson(
+            Map<String, dynamic>.from(res['data'] as Map),
+          );
           // Update local state of Dewan with server-confirmed record
           ref.read(nilaiListProvider.notifier).addFromSocket(serverNilai);
 
@@ -751,7 +827,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     // Disqualification immediately ends the match and declares the opponent the winner!
     if (aksi == 'diskualifikasi') {
       final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-      final merahId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+      final merahId =
+          _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
       final gelanggangId = gelanggang?.documentId ?? '';
 
       setState(() {
@@ -788,15 +865,28 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   void _startVerifikasiJatuhan() {
     if (!_tandingStatus) {
-      _showSnack('Pertandingan belum dimulai! Klik MULAI terlebih dahulu.', PusakaTheme.amber500);
+      _showSnack(
+        'Pertandingan belum dimulai! Klik MULAI terlebih dahulu.',
+        PusakaTheme.amber500,
+      );
       return;
     }
     debugPrint('[Dewan] _startVerifikasiJatuhan triggered');
     final gelanggang = ref.read(activeGelanggangProvider);
     final jadwalDocId = _selectedJadwal?.documentId ?? '';
 
-    final bId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? _selectedJadwal?.biruPeserta?.documentId ?? gelanggang?.atlit1Id ?? '';
-    final mId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? _selectedJadwal?.merahPeserta?.documentId ?? gelanggang?.atlit2Id ?? '';
+    final bId =
+        _atlitBiru?.documentId ??
+        _atlitBiru?.id?.toString() ??
+        _selectedJadwal?.biruPeserta?.documentId ??
+        gelanggang?.atlit1Id ??
+        '';
+    final mId =
+        _atlitMerah?.documentId ??
+        _atlitMerah?.id?.toString() ??
+        _selectedJadwal?.merahPeserta?.documentId ??
+        gelanggang?.atlit2Id ??
+        '';
 
     setState(() {
       _verifikasiActive = true;
@@ -814,13 +904,25 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       'judul': 'VERIFIKASI JATUHAN',
       'atlitBiru': {
         'documentId': bId,
-        'nama': _atlitBiru?.namaLengkap ?? _selectedJadwal?.biruPeserta?.namaLengkap ?? 'Sudut Biru',
-        'kontingen': _atlitBiru?.kontingen ?? _selectedJadwal?.biruPeserta?.kontingen ?? '-',
+        'nama':
+            _atlitBiru?.namaLengkap ??
+            _selectedJadwal?.biruPeserta?.namaLengkap ??
+            'Sudut Biru',
+        'kontingen':
+            _atlitBiru?.kontingen ??
+            _selectedJadwal?.biruPeserta?.kontingen ??
+            '-',
       },
       'atlitMerah': {
         'documentId': mId,
-        'nama': _atlitMerah?.namaLengkap ?? _selectedJadwal?.merahPeserta?.namaLengkap ?? 'Sudut Merah',
-        'kontingen': _atlitMerah?.kontingen ?? _selectedJadwal?.merahPeserta?.kontingen ?? '-',
+        'nama':
+            _atlitMerah?.namaLengkap ??
+            _selectedJadwal?.merahPeserta?.namaLengkap ??
+            'Sudut Merah',
+        'kontingen':
+            _atlitMerah?.kontingen ??
+            _selectedJadwal?.merahPeserta?.kontingen ??
+            '-',
       },
       'babak': _selectedJadwal?.babak ?? '1',
       'menit_ke': _formattedTimer,
@@ -905,10 +1007,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0369A1).withValues(alpha: 0.3),
+                                color: const Color(
+                                  0xFF0369A1,
+                                ).withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.verified_user_rounded, color: Color(0xFF38BDF8), size: 24),
+                              child: const Icon(
+                                Icons.verified_user_rounded,
+                                color: Color(0xFF38BDF8),
+                                size: 24,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Column(
@@ -916,26 +1024,46 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                               children: const [
                                 Text(
                                   'VERIFIKASI JATUHAN SEDANG BERLANGSUNG',
-                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                                 Text(
                                   'Menunggu input verifikasi dari 3 Juri Pertandingan',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0369A1).withValues(alpha: 0.25),
+                            color: const Color(
+                              0xFF0369A1,
+                            ).withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5)),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF38BDF8,
+                              ).withValues(alpha: 0.5),
+                            ),
                           ),
                           child: Text(
                             '$votesCount / 3 JURI MERESPON',
-                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.w900),
+                            style: const TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ],
@@ -962,29 +1090,36 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     if (_verifikasiHasil != null) ...[
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 18,
+                        ),
                         decoration: BoxDecoration(
                           color: _verifikasiHasil == 'biru'
                               ? const Color(0xFF0284C7).withValues(alpha: 0.45)
                               : _verifikasiHasil == 'merah'
-                                  ? const Color(0xFFE11D48).withValues(alpha: 0.45)
-                                  : const Color(0xFF1E293B).withValues(alpha: 0.8),
+                              ? const Color(0xFFE11D48).withValues(alpha: 0.45)
+                              : const Color(0xFF1E293B).withValues(alpha: 0.8),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: _verifikasiHasil == 'biru'
                                 ? const Color(0xFF38BDF8)
                                 : _verifikasiHasil == 'merah'
-                                    ? const Color(0xFFFB7185)
-                                    : const Color(0xFF94A3B8),
+                                ? const Color(0xFFFB7185)
+                                : const Color(0xFF94A3B8),
                             width: 2.2,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: _verifikasiHasil == 'biru'
-                                  ? const Color(0xFF0284C7).withValues(alpha: 0.4)
+                                  ? const Color(
+                                      0xFF0284C7,
+                                    ).withValues(alpha: 0.4)
                                   : _verifikasiHasil == 'merah'
-                                      ? const Color(0xFFE11D48).withValues(alpha: 0.4)
-                                      : Colors.black.withValues(alpha: 0.3),
+                                  ? const Color(
+                                      0xFFE11D48,
+                                    ).withValues(alpha: 0.4)
+                                  : Colors.black.withValues(alpha: 0.3),
                               blurRadius: 16,
                             ),
                           ],
@@ -993,7 +1128,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              _verifikasiHasil == 'invalid' ? Icons.cancel_outlined : Icons.check_circle_rounded,
+                              _verifikasiHasil == 'invalid'
+                                  ? Icons.cancel_outlined
+                                  : Icons.check_circle_rounded,
                               color: Colors.white,
                               size: 28,
                             ),
@@ -1019,7 +1156,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                       if (_verifikasiHasil == 'invalid') ...[
                         const Text(
                           'Pilih sudut jika ingin membatalkan/mengurangi poin jatuhan:',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
@@ -1029,32 +1170,60 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () {
-                                  _handleKpAction('batal_jatuhan', _atlitBiru, false, point: -3, label: 'Jatuhan Batal (-3)');
+                                  _handleKpAction(
+                                    'batal_jatuhan',
+                                    _atlitBiru,
+                                    false,
+                                    point: -3,
+                                    label: 'Jatuhan Batal (-3)',
+                                  );
 
-                                  final gelanggang = ref.read(activeGelanggangProvider);
+                                  final gelanggang = ref.read(
+                                    activeGelanggangProvider,
+                                  );
                                   _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId': gelanggang?.documentId ?? '',
+                                    'gelanggangId':
+                                        gelanggang?.documentId ?? '',
                                     'jenis': _verifikasiJenis,
                                     'hasil': _verifikasiHasil,
-                                    'keterangan': 'Jatuhan Dibatalkan (-3) Sudut BIRU oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                    'keterangan':
+                                        'Jatuhan Dibatalkan (-3) Sudut BIRU oleh Dewan',
+                                    'votes': Map<String, dynamic>.from(
+                                      _verifikasiVotes,
+                                    ),
                                   });
 
                                   setState(() => _verifikasiActive = false);
                                   Navigator.pop(ctx);
-                                  _showSnack('Poin Jatuhan (-3) Sudut BIRU Berhasil Dikurangi!', PusakaTheme.amber500);
+                                  _showSnack(
+                                    'Poin Jatuhan (-3) Sudut BIRU Berhasil Dikurangi!',
+                                    PusakaTheme.amber500,
+                                  );
                                 },
-                                icon: const Icon(Icons.remove_circle, color: Color(0xFF38BDF8), size: 18),
+                                icon: const Icon(
+                                  Icons.remove_circle,
+                                  color: Color(0xFF38BDF8),
+                                  size: 18,
+                                ),
                                 label: const Text(
                                   'KURANGI (-3) BIRU',
-                                  style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0C4A6E),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+                                    side: const BorderSide(
+                                      color: Color(0xFF38BDF8),
+                                      width: 1.5,
+                                    ),
                                   ),
                                   elevation: 4,
                                 ),
@@ -1067,32 +1236,60 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () {
-                                  _handleKpAction('batal_jatuhan', _atlitMerah, true, point: -3, label: 'Jatuhan Batal (-3)');
+                                  _handleKpAction(
+                                    'batal_jatuhan',
+                                    _atlitMerah,
+                                    true,
+                                    point: -3,
+                                    label: 'Jatuhan Batal (-3)',
+                                  );
 
-                                  final gelanggang = ref.read(activeGelanggangProvider);
+                                  final gelanggang = ref.read(
+                                    activeGelanggangProvider,
+                                  );
                                   _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId': gelanggang?.documentId ?? '',
+                                    'gelanggangId':
+                                        gelanggang?.documentId ?? '',
                                     'jenis': _verifikasiJenis,
                                     'hasil': _verifikasiHasil,
-                                    'keterangan': 'Jatuhan Dibatalkan (-3) Sudut MERAH oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                    'keterangan':
+                                        'Jatuhan Dibatalkan (-3) Sudut MERAH oleh Dewan',
+                                    'votes': Map<String, dynamic>.from(
+                                      _verifikasiVotes,
+                                    ),
                                   });
 
                                   setState(() => _verifikasiActive = false);
                                   Navigator.pop(ctx);
-                                  _showSnack('Poin Jatuhan (-3) Sudut MERAH Berhasil Dikurangi!', PusakaTheme.amber500);
+                                  _showSnack(
+                                    'Poin Jatuhan (-3) Sudut MERAH Berhasil Dikurangi!',
+                                    PusakaTheme.amber500,
+                                  );
                                 },
-                                icon: const Icon(Icons.remove_circle, color: Color(0xFFFB7185), size: 18),
+                                icon: const Icon(
+                                  Icons.remove_circle,
+                                  color: Color(0xFFFB7185),
+                                  size: 18,
+                                ),
                                 label: const Text(
                                   'KURANGI (-3) MERAH',
-                                  style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF881337),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(color: Color(0xFFFB7185), width: 1.5),
+                                    side: const BorderSide(
+                                      color: Color(0xFFFB7185),
+                                      width: 1.5,
+                                    ),
                                   ),
                                   elevation: 4,
                                 ),
@@ -1108,27 +1305,41 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: () {
-                              final gelanggang = ref.read(activeGelanggangProvider);
+                              final gelanggang = ref.read(
+                                activeGelanggangProvider,
+                              );
                               _socketService.emitVerifikasiSelesai({
                                 'gelanggangId': gelanggang?.documentId ?? '',
                                 'jenis': _verifikasiJenis,
                                 'hasil': _verifikasiHasil,
                                 'keterangan': 'Jatuhan Tidak Sah (0 Poin)',
-                                'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                'votes': Map<String, dynamic>.from(
+                                  _verifikasiVotes,
+                                ),
                               });
 
                               setState(() => _verifikasiActive = false);
                               Navigator.pop(ctx);
                             },
-                            icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 16),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF94A3B8),
+                              size: 16,
+                            ),
                             label: const Text(
                               'TUTUP (JATUHAN TIDAK SAH / 0 POIN)',
-                              style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: Color(0xFFCBD5E1),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFF334155)),
                               padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                           ),
                         ),
@@ -1141,34 +1352,61 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                               child: ElevatedButton.icon(
                                 onPressed: () {
                                   final isRed = _verifikasiHasil == 'merah';
-                                  final atlit = isRed ? _atlitMerah : _atlitBiru;
+                                  final atlit = isRed
+                                      ? _atlitMerah
+                                      : _atlitBiru;
                                   final labelSudut = isRed ? 'MERAH' : 'BIRU';
 
-                                  _handleKpAction('jatuhan', atlit, isRed, point: 3, label: 'Jatuhan (+3)');
+                                  _handleKpAction(
+                                    'jatuhan',
+                                    atlit,
+                                    isRed,
+                                    point: 3,
+                                    label: 'Jatuhan (+3)',
+                                  );
 
-                                  final gelanggang = ref.read(activeGelanggangProvider);
+                                  final gelanggang = ref.read(
+                                    activeGelanggangProvider,
+                                  );
                                   _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId': gelanggang?.documentId ?? '',
+                                    'gelanggangId':
+                                        gelanggang?.documentId ?? '',
                                     'jenis': _verifikasiJenis,
                                     'hasil': _verifikasiHasil,
-                                    'keterangan': 'Jatuhan SAH (+3) Sudut $labelSudut Dikonfirmasi Dewan',
-                                    'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                    'keterangan':
+                                        'Jatuhan SAH (+3) Sudut $labelSudut Dikonfirmasi Dewan',
+                                    'votes': Map<String, dynamic>.from(
+                                      _verifikasiVotes,
+                                    ),
                                   });
 
                                   setState(() => _verifikasiActive = false);
                                   Navigator.pop(ctx);
-                                  _showSnack('Poin Jatuhan (+3) Sudut $labelSudut Berhasil Ditambahkan!', PusakaTheme.emerald600);
+                                  _showSnack(
+                                    'Poin Jatuhan (+3) Sudut $labelSudut Berhasil Ditambahkan!',
+                                    PusakaTheme.emerald600,
+                                  );
                                 },
-                                icon: const Icon(Icons.add_circle, color: Colors.white, size: 20),
+                                icon: const Icon(
+                                  Icons.add_circle,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 label: Text(
                                   'TAMBAH NILAI (+3) ${_verifikasiHasil!.toUpperCase()}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _verifikasiHasil == 'biru'
                                       ? const Color(0xFF0284C7)
                                       : const Color(0xFFE11D48),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     side: BorderSide(
@@ -1190,35 +1428,65 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                               child: ElevatedButton.icon(
                                 onPressed: () {
                                   final isRed = _verifikasiHasil == 'merah';
-                                  final atlit = isRed ? _atlitMerah : _atlitBiru;
+                                  final atlit = isRed
+                                      ? _atlitMerah
+                                      : _atlitBiru;
                                   final labelSudut = isRed ? 'MERAH' : 'BIRU';
 
-                                  _handleKpAction('batal_jatuhan', atlit, isRed, point: -3, label: 'Jatuhan Batal (-3)');
+                                  _handleKpAction(
+                                    'batal_jatuhan',
+                                    atlit,
+                                    isRed,
+                                    point: -3,
+                                    label: 'Jatuhan Batal (-3)',
+                                  );
 
-                                  final gelanggang = ref.read(activeGelanggangProvider);
+                                  final gelanggang = ref.read(
+                                    activeGelanggangProvider,
+                                  );
                                   _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId': gelanggang?.documentId ?? '',
+                                    'gelanggangId':
+                                        gelanggang?.documentId ?? '',
                                     'jenis': _verifikasiJenis,
                                     'hasil': _verifikasiHasil,
-                                    'keterangan': 'Jatuhan Dibatalkan (-3) Sudut $labelSudut oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                    'keterangan':
+                                        'Jatuhan Dibatalkan (-3) Sudut $labelSudut oleh Dewan',
+                                    'votes': Map<String, dynamic>.from(
+                                      _verifikasiVotes,
+                                    ),
                                   });
 
                                   setState(() => _verifikasiActive = false);
                                   Navigator.pop(ctx);
-                                  _showSnack('Poin Jatuhan (-3) Sudut $labelSudut Berhasil Dikurangi!', PusakaTheme.amber500);
+                                  _showSnack(
+                                    'Poin Jatuhan (-3) Sudut $labelSudut Berhasil Dikurangi!',
+                                    PusakaTheme.amber500,
+                                  );
                                 },
-                                icon: const Icon(Icons.remove_circle, color: Colors.white, size: 20),
+                                icon: const Icon(
+                                  Icons.remove_circle,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 label: Text(
                                   'KURANGI NILAI (-3) ${_verifikasiHasil!.toUpperCase()}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF78350F),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                                    side: const BorderSide(
+                                      color: Color(0xFFF59E0B),
+                                      width: 1.5,
+                                    ),
                                   ),
                                   elevation: 4,
                                 ),
@@ -1234,27 +1502,42 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: () {
-                              final gelanggang = ref.read(activeGelanggangProvider);
+                              final gelanggang = ref.read(
+                                activeGelanggangProvider,
+                              );
                               _socketService.emitVerifikasiSelesai({
                                 'gelanggangId': gelanggang?.documentId ?? '',
                                 'jenis': _verifikasiJenis,
                                 'hasil': _verifikasiHasil,
-                                'keterangan': 'Verifikasi Ditutup Tanpa Perubahan Poin',
-                                'votes': Map<String, dynamic>.from(_verifikasiVotes),
+                                'keterangan':
+                                    'Verifikasi Ditutup Tanpa Perubahan Poin',
+                                'votes': Map<String, dynamic>.from(
+                                  _verifikasiVotes,
+                                ),
                               });
 
                               setState(() => _verifikasiActive = false);
                               Navigator.pop(ctx);
                             },
-                            icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 16),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF94A3B8),
+                              size: 16,
+                            ),
                             label: const Text(
                               'TUTUP TANPA PERUBAHAN POIN',
-                              style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: Color(0xFFCBD5E1),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFF334155)),
                               padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                           ),
                         ),
@@ -1274,12 +1557,19 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF38BDF8),
+                              ),
                             ),
                             SizedBox(width: 10),
                             Text(
                               'Menunggu keputusan 2 dari 3 Juri...',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
@@ -1295,14 +1585,26 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             onPressed: () {
                               setState(() => _verifikasiActive = false);
                               _socketService.emitVerifikasiSelesai({
-                                'gelanggangId': ref.read(activeGelanggangProvider)?.documentId ?? '',
+                                'gelanggangId':
+                                    ref
+                                        .read(activeGelanggangProvider)
+                                        ?.documentId ??
+                                    '',
                                 'hasil': 'dibatalkan',
-                                'keterangan': 'Verifikasi dibatalkan oleh Dewan',
+                                'keterangan':
+                                    'Verifikasi dibatalkan oleh Dewan',
                               });
                               Navigator.pop(ctx);
                             },
-                            icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 16),
-                            label: const Text('Batalkan Verifikasi', style: TextStyle(color: Color(0xFF94A3B8))),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF94A3B8),
+                              size: 16,
+                            ),
+                            label: const Text(
+                              'Batalkan Verifikasi',
+                              style: TextStyle(color: Color(0xFF94A3B8)),
+                            ),
                           ),
                         ],
                       ),
@@ -1361,14 +1663,22 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         children: [
           Text(
             juriLabel,
-            style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w900),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 8),
           Icon(statusIcon, color: textCol, size: 26),
           const SizedBox(height: 6),
           Text(
             statusLabel,
-            style: TextStyle(color: textCol, fontSize: 11.5, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: textCol,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w900,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1380,7 +1690,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        content: Text(
+          message,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1418,7 +1731,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           color: const Color(0xFF4338CA).withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.format_list_numbered_rounded, color: Color(0xFF818CF8), size: 22),
+                        child: const Icon(
+                          Icons.format_list_numbered_rounded,
+                          color: Color(0xFF818CF8),
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Column(
@@ -1435,7 +1752,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           ),
                           Text(
                             'Pilih partai tanding untuk memuat data atlet sudut biru dan merah',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1447,11 +1767,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         builder: (context, ref, _) {
                           return IconButton(
                             tooltip: 'Muat Ulang Jadwal',
-                            icon: const Icon(Icons.refresh, color: Color(0xFF818CF8)),
+                            icon: const Icon(
+                              Icons.refresh,
+                              color: Color(0xFF818CF8),
+                            ),
                             onPressed: () {
                               final g = ref.read(activeGelanggangProvider);
                               if (g != null) {
-                                ref.read(jadwalListProvider.notifier).fetchJadwal(g);
+                                ref
+                                    .read(jadwalListProvider.notifier)
+                                    .fetchJadwal(g);
                               }
                             },
                           );
@@ -1483,18 +1808,30 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.event_busy, color: Color(0xFF64748B), size: 48),
+                                const Icon(
+                                  Icons.event_busy,
+                                  color: Color(0xFF64748B),
+                                  size: 48,
+                                ),
                                 const SizedBox(height: 12),
                                 const Text(
                                   'Belum ada jadwal partai di arena ini',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 const SizedBox(height: 12),
                                 ElevatedButton.icon(
                                   onPressed: () {
-                                    final g = ref.read(activeGelanggangProvider);
+                                    final g = ref.read(
+                                      activeGelanggangProvider,
+                                    );
                                     if (g != null) {
-                                      ref.read(jadwalListProvider.notifier).fetchJadwal(g);
+                                      ref
+                                          .read(jadwalListProvider.notifier)
+                                          .fetchJadwal(g);
                                     }
                                   },
                                   icon: const Icon(Icons.refresh, size: 16),
@@ -1511,24 +1848,35 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                         return ListView.separated(
                           itemCount: list.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
                             final j = list[idx];
-                            final isSelected = _selectedJadwal?.documentId == j.documentId ||
-                                (_selectedJadwal?.id != null && _selectedJadwal?.id == j.id);
+                            final isSelected =
+                                _selectedJadwal?.documentId == j.documentId ||
+                                (_selectedJadwal?.id != null &&
+                                    _selectedJadwal?.id == j.id);
 
                             return InkWell(
                               onTap: () {
                                 _applyJadwalSelection(j);
                                 Navigator.pop(ctx);
-                                _showSnack('Memilih Partai #${j.nomorPartai ?? '-'}', PusakaTheme.indigo500);
+                                _showSnack(
+                                  'Memilih Partai #${j.nomorPartai ?? '-'}',
+                                  PusakaTheme.indigo500,
+                                );
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? const Color(0xFF1E1B4B).withValues(alpha: 0.85)
+                                      ? const Color(
+                                          0xFF1E1B4B,
+                                        ).withValues(alpha: 0.85)
                                       : const Color(0xFF0F172A),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
@@ -1542,18 +1890,34 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                   children: [
                                     // Partai Number Badge
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                        color: isSelected
+                                            ? const Color(0xFF4F46E5)
+                                            : const Color(0xFF1E293B),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Text('PARTAI', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                          const Text(
+                                            'PARTAI',
+                                            style: TextStyle(
+                                              color: Color(0xFFCBD5E1),
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                           Text(
                                             '#${j.nomorPartai ?? '-'}',
-                                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w900,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -1565,26 +1929,54 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                     Expanded(
                                       flex: 4,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF0369A1).withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.45)),
+                                          color: const Color(
+                                            0xFF0369A1,
+                                          ).withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(
+                                              0xFF0284C7,
+                                            ).withValues(alpha: 0.45),
+                                          ),
                                         ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 8.5, fontWeight: FontWeight.w900)),
+                                            const Text(
+                                              'SUDUT BIRU',
+                                              style: TextStyle(
+                                                color: Color(0xFF38BDF8),
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              j.biruPeserta?.namaLengkap ?? 'Belum Ditentukan',
-                                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                                              j.biruPeserta?.namaLengkap ??
+                                                  'Belum Ditentukan',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             Text(
-                                              j.biruPeserta?.kontingen ?? 'Kontingen -',
-                                              style: const TextStyle(color: Color(0xFF7DD3FC), fontSize: 10.5),
+                                              j.biruPeserta?.kontingen ??
+                                                  'Kontingen -',
+                                              style: const TextStyle(
+                                                color: Color(0xFF7DD3FC),
+                                                fontSize: 10.5,
+                                              ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -1595,16 +1987,27 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                                     // VS Badge
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF334155),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
                                         child: const Text(
                                           'VS',
-                                          style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w900),
+                                          style: TextStyle(
+                                            color: Colors.amber,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1613,26 +2016,54 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                     Expanded(
                                       flex: 4,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF9F1239).withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFFE11D48).withValues(alpha: 0.45)),
+                                          color: const Color(
+                                            0xFF9F1239,
+                                          ).withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(
+                                              0xFFE11D48,
+                                            ).withValues(alpha: 0.45),
+                                          ),
                                         ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 8.5, fontWeight: FontWeight.w900)),
+                                            const Text(
+                                              'SUDUT MERAH',
+                                              style: TextStyle(
+                                                color: Color(0xFFFB7185),
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              j.merahPeserta?.namaLengkap ?? 'Belum Ditentukan',
-                                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                                              j.merahPeserta?.namaLengkap ??
+                                                  'Belum Ditentukan',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             Text(
-                                              j.merahPeserta?.kontingen ?? 'Kontingen -',
-                                              style: const TextStyle(color: Color(0xFFFDA4AF), fontSize: 10.5),
+                                              j.merahPeserta?.kontingen ??
+                                                  'Kontingen -',
+                                              style: const TextStyle(
+                                                color: Color(0xFFFDA4AF),
+                                                fontSize: 10.5,
+                                              ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -1645,27 +2076,48 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                                     // Class & Selection Status
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3.5,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFF1E1B4B),
-                                            borderRadius: BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                           ),
                                           child: Text(
                                             j.kelas?.namaKelas ?? 'Kelas',
-                                            style: const TextStyle(color: Color(0xFFA5B4FC), fontSize: 10.5, fontWeight: FontWeight.w800),
+                                            style: const TextStyle(
+                                              color: Color(0xFFA5B4FC),
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 4),
                                         if (isSelected)
                                           const Row(
                                             children: [
-                                              Icon(Icons.check_circle, color: Color(0xFF34D399), size: 16),
+                                              Icon(
+                                                Icons.check_circle,
+                                                color: Color(0xFF34D399),
+                                                size: 16,
+                                              ),
                                               SizedBox(width: 4),
-                                              Text('Dipilih', style: TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.bold)),
+                                              Text(
+                                                'Dipilih',
+                                                style: TextStyle(
+                                                  color: Color(0xFF34D399),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ],
                                           ),
                                       ],
@@ -1683,7 +2135,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           children: [
                             CircularProgressIndicator(color: Color(0xFF818CF8)),
                             SizedBox(height: 12),
-                            Text('Memuat jadwal partai...', style: TextStyle(color: Color(0xFF94A3B8))),
+                            Text(
+                              'Memuat jadwal partai...',
+                              style: TextStyle(color: Color(0xFF94A3B8)),
+                            ),
                           ],
                         ),
                       ),
@@ -1691,15 +2146,27 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 40),
+                            const Icon(
+                              Icons.error_outline,
+                              color: Color(0xFFEF4444),
+                              size: 40,
+                            ),
                             const SizedBox(height: 8),
-                            Text('Gagal memuat jadwal: $err', style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
+                            Text(
+                              'Gagal memuat jadwal: $err',
+                              style: const TextStyle(
+                                color: Color(0xFFFCA5A5),
+                                fontSize: 12,
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             ElevatedButton(
                               onPressed: () {
                                 final g = ref.read(activeGelanggangProvider);
                                 if (g != null) {
-                                  ref.read(jadwalListProvider.notifier).fetchJadwal(g);
+                                  ref
+                                      .read(jadwalListProvider.notifier)
+                                      .fetchJadwal(g);
                                 }
                               },
                               child: const Text('Coba Lagi'),
@@ -1737,8 +2204,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   void _fetchNilai() {
-    final bId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? _selectedJadwal?.biruPeserta?.documentId ?? '';
-    final mId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? _selectedJadwal?.merahPeserta?.documentId ?? '';
+    final bId =
+        _atlitBiru?.documentId ??
+        _atlitBiru?.id?.toString() ??
+        _selectedJadwal?.biruPeserta?.documentId ??
+        '';
+    final mId =
+        _atlitMerah?.documentId ??
+        _atlitMerah?.id?.toString() ??
+        _selectedJadwal?.merahPeserta?.documentId ??
+        '';
     if (bId.isNotEmpty || mId.isNotEmpty) {
       ref.read(nilaiListProvider.notifier).fetchNilai(bId, mId);
     }
@@ -1756,14 +2231,34 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       }
     });
 
-    final atlitBiruDocId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-    final atlitMerahDocId = _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
-    final totalSkorBiru = countNilaiForPeserta(allNilai, atlitBiruDocId, sudut: 'biru');
-    final totalSkorMerah = countNilaiForPeserta(allNilai, atlitMerahDocId, sudut: 'merah');
+    final atlitBiruDocId =
+        _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
+    final atlitMerahDocId =
+        _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final totalSkorBiru = countNilaiForPeserta(
+      allNilai,
+      atlitBiruDocId,
+      sudut: 'biru',
+    );
+    final totalSkorMerah = countNilaiForPeserta(
+      allNilai,
+      atlitMerahDocId,
+      sudut: 'merah',
+    );
 
     // Get 5 latest score logs for each athlete
-    final historyBiru = recentNilaiForPeserta(allNilai, atlitBiruDocId, limit: 5, sudut: 'biru');
-    final historyMerah = recentNilaiForPeserta(allNilai, atlitMerahDocId, limit: 5, sudut: 'merah');
+    final historyBiru = recentNilaiForPeserta(
+      allNilai,
+      atlitBiruDocId,
+      limit: 5,
+      sudut: 'biru',
+    );
+    final historyMerah = recentNilaiForPeserta(
+      allNilai,
+      atlitMerahDocId,
+      limit: 5,
+      sudut: 'merah',
+    );
 
     return Scaffold(
       body: Container(
@@ -1787,7 +2282,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
               // ── 3. Main 3-Column Arena Console ──
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1806,10 +2304,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                       const SizedBox(width: 10),
 
                       // 2. CENTER CONTROLLER (TIMER, MULAI/STOP & DEWAN VERIFIKASI)
-                      SizedBox(
-                        width: 240,
-                        child: _buildCenterControl(),
-                      ),
+                      SizedBox(width: 240, child: _buildCenterControl()),
 
                       const SizedBox(width: 10),
 
@@ -1862,7 +2357,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF334155)),
                   ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white70, size: 18),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1880,7 +2379,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     ),
                   ),
                   Text(
-                    gelanggang?.event?.namaEvent ?? 'KEJUARAAN NASIONAL PENCAK SILAT 2026',
+                    gelanggang?.event?.namaEvent ??
+                        'KEJUARAAN NASIONAL PENCAK SILAT 2026',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14.5,
@@ -1898,15 +2398,24 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             children: [
               // Arena Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1B4B).withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF4338CA).withValues(alpha: 0.5)),
+                  border: Border.all(
+                    color: const Color(0xFF4338CA).withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.stadium, color: Color(0xFF818CF8), size: 14),
+                    const Icon(
+                      Icons.stadium,
+                      color: Color(0xFF818CF8),
+                      size: 14,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'ARENA ${gelanggang?.keterangan ?? gelanggang?.kodeGelanggang ?? '-'}',
@@ -1925,14 +2434,19 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
               // Status Tanding Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: _tandingStatus
                       ? const Color(0xFF064E3B).withValues(alpha: 0.8)
                       : const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _tandingStatus ? const Color(0xFF10B981) : const Color(0xFF475569),
+                    color: _tandingStatus
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF475569),
                     width: 1.2,
                   ),
                 ),
@@ -1943,14 +2457,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                       height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _tandingStatus ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                        color: _tandingStatus
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       _tandingStatus ? 'BERLANGSUNG' : 'STANDBY',
                       style: TextStyle(
-                        color: _tandingStatus ? const Color(0xFF34D399) : const Color(0xFFCBD5E1),
+                        color: _tandingStatus
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFFCBD5E1),
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.0,
@@ -1974,7 +2492,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   // ── 2. DEDICATED TOP BAR: BABAK SELECTOR & PARTAI SELECTOR ──
   // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildPartaiSelectorBar(AsyncValue<List<Jadwal>> jadwalState, Gelanggang? gelanggang) {
+  Widget _buildPartaiSelectorBar(
+    AsyncValue<List<Jadwal>> jadwalState,
+    Gelanggang? gelanggang,
+  ) {
     final isLocked = _tandingStatus; // Locked when match is actively running
     final list = jadwalState.valueOrNull ?? [];
 
@@ -1984,8 +2505,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       final a2 = gelanggang?.atlit2Id;
       final activeMatch = list.where((j) {
         final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-        final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
-        return (bId == a1 && mId == a2) || (bId == a2 && mId == a1) || j.statusTanding == 'berlangsung';
+        final mId =
+            j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
+        return (bId == a1 && mId == a2) ||
+            (bId == a2 && mId == a1) ||
+            j.statusTanding == 'berlangsung';
       }).firstOrNull;
 
       final target = activeMatch ?? list.first;
@@ -2006,9 +2530,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           const SizedBox(width: 8),
 
           // ── 2. KOTAK PILIH PARTAI TANDING (EXPANDED) ──
-          Expanded(
-            child: _buildPartaiSelectorBox(isLocked),
-          ),
+          Expanded(child: _buildPartaiSelectorBox(isLocked)),
         ],
       ),
     );
@@ -2102,7 +2624,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             color: isActive ? null : const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isActive ? const Color(0xFFFDE68A) : const Color(0xFF475569),
+              color: isActive
+                  ? const Color(0xFFFDE68A)
+                  : const Color(0xFF475569),
               width: isActive ? 1.5 : 1.0,
             ),
             boxShadow: isActive
@@ -2119,7 +2643,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isActive) ...[
-                const Icon(Icons.check_circle_rounded, size: 13, color: Colors.white),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 13,
+                  color: Colors.white,
+                ),
                 const SizedBox(width: 4),
               ],
               Text(
@@ -2144,7 +2672,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       child: InkWell(
         onTap: () {
           if (isLocked) {
-            _showSnack('Pertandingan sedang berlangsung. Selesaikan pertandingan terlebih dahulu untuk mengganti partai.', PusakaTheme.amber500);
+            _showSnack(
+              'Pertandingan sedang berlangsung. Selesaikan pertandingan terlebih dahulu untuk mengganti partai.',
+              PusakaTheme.amber500,
+            );
           } else {
             _showPartaiPickerDialog();
           }
@@ -2185,9 +2716,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      isLocked ? Icons.lock_rounded : Icons.format_list_numbered_rounded,
+                      isLocked
+                          ? Icons.lock_rounded
+                          : Icons.format_list_numbered_rounded,
                       size: 18,
-                      color: isLocked ? const Color(0xFF94A3B8) : const Color(0xFF818CF8),
+                      color: isLocked
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF818CF8),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2200,7 +2735,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           Text(
                             'PILIH PARTAI TANDING',
                             style: TextStyle(
-                              color: isLocked ? const Color(0xFF64748B) : const Color(0xFF818CF8),
+                              color: isLocked
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF818CF8),
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.0,
@@ -2209,28 +2746,54 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           const SizedBox(width: 8),
                           if (isLocked)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF7F1D1D).withValues(alpha: 0.6),
+                                color: const Color(
+                                  0xFF7F1D1D,
+                                ).withValues(alpha: 0.6),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFFEF4444,
+                                  ).withValues(alpha: 0.5),
+                                ),
                               ),
                               child: const Text(
                                 'TERKUNCI SAAT TANDING',
-                                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 8, fontWeight: FontWeight.w900),
+                                style: TextStyle(
+                                  color: Color(0xFFFCA5A5),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             )
                           else
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF065F46).withValues(alpha: 0.5),
+                                color: const Color(
+                                  0xFF065F46,
+                                ).withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withValues(alpha: 0.5),
+                                ),
                               ),
                               child: const Text(
                                 'KLIK UNTUK MEMILIH',
-                                style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 8, fontWeight: FontWeight.w900),
+                                style: TextStyle(
+                                  color: Color(0xFF6EE7B7),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
                         ],
@@ -2241,7 +2804,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             ? 'PARTAI #${_selectedJadwal!.nomorPartai ?? '-'} | ${_selectedJadwal!.kelas?.namaKelas ?? 'Kelas'} : B [${_selectedJadwal!.biruPeserta?.namaLengkap ?? 'TBD'}] vs M [${_selectedJadwal!.merahPeserta?.namaLengkap ?? 'TBD'}]'
                             : 'Pilih partai pertandingan untuk arena ini',
                         style: TextStyle(
-                          color: isLocked ? const Color(0xFF94A3B8) : Colors.white,
+                          color: isLocked
+                              ? const Color(0xFF94A3B8)
+                              : Colors.white,
                           fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2255,9 +2820,14 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
               // Right: Action Indicator Button (Enlarged)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
-                  color: isLocked ? const Color(0xFF1E293B) : const Color(0xFF4F46E5),
+                  color: isLocked
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFF4F46E5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -2271,7 +2841,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     Text(
                       isLocked ? 'Terkunci' : 'Ganti Partai',
                       style: TextStyle(
-                        color: isLocked ? const Color(0xFF64748B) : Colors.white,
+                        color: isLocked
+                            ? const Color(0xFF64748B)
+                            : Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2355,11 +2927,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2.5,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.7)),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF38BDF8,
+                                ).withValues(alpha: 0.7),
+                              ),
                             ),
                             child: const Text(
                               'SUDUT BIRU',
@@ -2373,7 +2952,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _atlitBiru?.namaLengkap?.toUpperCase() ?? 'BELUM ADA ATLET',
+                            _atlitBiru?.namaLengkap?.toUpperCase() ??
+                                'BELUM ADA ATLET',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -2384,7 +2964,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            _atlitBiru?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
+                            _atlitBiru?.kontingen?.toUpperCase() ??
+                                'KONTINGEN -',
                             style: const TextStyle(
                               color: Color(0xFFBAE6FD),
                               fontSize: 11,
@@ -2399,11 +2980,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                     // Big Glowing Blue Score
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF38BDF8), width: 1.8),
+                        border: Border.all(
+                          color: const Color(0xFF38BDF8),
+                          width: 1.8,
+                        ),
                       ),
                       child: Text(
                         '$totalScore',
@@ -2440,19 +3027,132 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     childAspectRatio: 1.85,
                     children: [
                       // Row 1
-                      _buildActionTile('Binaan 1', Icons.touch_app_outlined, const Color(0xFF1E293B), () => _handleKpAction('binaan', _atlitBiru, false, point: 0, label: 'Binaan 1')),
-                      _buildActionTile('Binaan 2', Icons.front_hand_outlined, const Color(0xFF1E293B), () => _handleKpAction('binaan', _atlitBiru, false, point: 0, label: 'Binaan 2')),
-                      _buildActionTile('Jatuhan +3', Icons.sports_martial_arts, const Color(0xFF059669), () => _handleKpAction('jatuhan', _atlitBiru, false, point: 3, label: 'Jatuhan (+3)'), isFilled: true, textColor: Colors.white),
+                      _buildActionTile(
+                        'Binaan 1',
+                        Icons.touch_app_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'binaan',
+                          _atlitBiru,
+                          false,
+                          point: 0,
+                          label: 'Binaan 1',
+                        ),
+                      ),
+                      _buildActionTile(
+                        'Binaan 2',
+                        Icons.front_hand_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'binaan',
+                          _atlitBiru,
+                          false,
+                          point: 0,
+                          label: 'Binaan 2',
+                        ),
+                      ),
+                      _buildActionTile(
+                        'Jatuhan +3',
+                        Icons.sports_martial_arts,
+                        const Color(0xFF059669),
+                        () => _handleKpAction(
+                          'jatuhan',
+                          _atlitBiru,
+                          false,
+                          point: 3,
+                          label: 'Jatuhan (+3)',
+                        ),
+                        isFilled: true,
+                        textColor: Colors.white,
+                      ),
 
                       // Row 2
-                      _buildActionTile('Teguran 1 (-1)', Icons.looks_one_outlined, const Color(0xFF1E293B), () => _handleKpAction('teguran', _atlitBiru, false, point: -1, label: 'Teguran 1 (-1)'), badge: '-1', badgeColor: const Color(0xFFFB923C)),
-                      _buildActionTile('Teguran 2 (-2)', Icons.looks_two_outlined, const Color(0xFF1E293B), () => _handleKpAction('teguran', _atlitBiru, false, point: -2, label: 'Teguran 2 (-2)'), badge: '-2', badgeColor: const Color(0xFFFB923C)),
-                      _buildActionTile('Jatuhan Batal', Icons.rotate_left, const Color(0xFF78350F), () => _handleKpAction('batal_jatuhan', _atlitBiru, false, point: -3, label: 'Jatuhan Batal (-3)'), isFilled: true, textColor: const Color(0xFFFDE68A)),
+                      _buildActionTile(
+                        'Teguran 1 (-1)',
+                        Icons.looks_one_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'teguran',
+                          _atlitBiru,
+                          false,
+                          point: -1,
+                          label: 'Teguran 1 (-1)',
+                        ),
+                        badge: '-1',
+                        badgeColor: const Color(0xFFFB923C),
+                      ),
+                      _buildActionTile(
+                        'Teguran 2 (-2)',
+                        Icons.looks_two_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'teguran',
+                          _atlitBiru,
+                          false,
+                          point: -2,
+                          label: 'Teguran 2 (-2)',
+                        ),
+                        badge: '-2',
+                        badgeColor: const Color(0xFFFB923C),
+                      ),
+                      _buildActionTile(
+                        'Jatuhan Batal',
+                        Icons.rotate_left,
+                        const Color(0xFF78350F),
+                        () => _handleKpAction(
+                          'batal_jatuhan',
+                          _atlitBiru,
+                          false,
+                          point: -3,
+                          label: 'Jatuhan Batal (-3)',
+                        ),
+                        isFilled: true,
+                        textColor: const Color(0xFFFDE68A),
+                      ),
 
                       // Row 3
-                      _buildActionTile('Peringatan 1 (-5)', Icons.gavel, const Color(0xFF1E293B), () => _handleKpAction('pembinaan', _atlitBiru, false, point: -5, label: 'Peringatan 1 (-5)'), badge: '-5', badgeColor: const Color(0xFFF43F5E)),
-                      _buildActionTile('Peringatan 2 (-10)', Icons.warning_amber_rounded, const Color(0xFF1E293B), () => _handleKpAction('pembinaan', _atlitBiru, false, point: -10, label: 'Peringatan 2 (-10)'), badge: '-10', badgeColor: const Color(0xFFF43F5E)),
-                      _buildActionTile('Diskualifikasi', Icons.do_not_disturb_on_total_silence, const Color(0xFF991B1B), () => _handleKpAction('diskualifikasi', _atlitBiru, false, point: 0, label: 'Diskualifikasi'), isFilled: true, textColor: Colors.white),
+                      _buildActionTile(
+                        'Peringatan 1 (-5)',
+                        Icons.gavel,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'pembinaan',
+                          _atlitBiru,
+                          false,
+                          point: -5,
+                          label: 'Peringatan 1 (-5)',
+                        ),
+                        badge: '-5',
+                        badgeColor: const Color(0xFFF43F5E),
+                      ),
+                      _buildActionTile(
+                        'Peringatan 2 (-10)',
+                        Icons.warning_amber_rounded,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'pembinaan',
+                          _atlitBiru,
+                          false,
+                          point: -10,
+                          label: 'Peringatan 2 (-10)',
+                        ),
+                        badge: '-10',
+                        badgeColor: const Color(0xFFF43F5E),
+                      ),
+                      _buildActionTile(
+                        'Diskualifikasi',
+                        Icons.do_not_disturb_on_total_silence,
+                        const Color(0xFF991B1B),
+                        () => _handleKpAction(
+                          'diskualifikasi',
+                          _atlitBiru,
+                          false,
+                          point: 0,
+                          label: 'Diskualifikasi',
+                        ),
+                        isFilled: true,
+                        textColor: Colors.white,
+                      ),
                     ],
                   ),
                 ),
@@ -2462,7 +3162,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                 // ── Vertical Log Nilai Masuk (Biru - 5 Latest) ──
                 Expanded(
                   flex: 2,
-                  child: _buildVerticalLogNilaiSection('LOG NILAI MASUK (BIRU):', history, const Color(0xFF38BDF8)),
+                  child: _buildVerticalLogNilaiSection(
+                    'LOG NILAI MASUK (BIRU):',
+                    history,
+                    const Color(0xFF38BDF8),
+                  ),
                 ),
               ],
             ),
@@ -2537,11 +3241,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   children: [
                     // Big Glowing Red Score
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFFB7185), width: 1.8),
+                        border: Border.all(
+                          color: const Color(0xFFFB7185),
+                          width: 1.8,
+                        ),
                       ),
                       child: Text(
                         '$totalScore',
@@ -2563,11 +3273,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2.5,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFB7185).withValues(alpha: 0.7)),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFFFB7185,
+                                ).withValues(alpha: 0.7),
+                              ),
                             ),
                             child: const Text(
                               'SUDUT MERAH',
@@ -2581,7 +3298,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _atlitMerah?.namaLengkap?.toUpperCase() ?? 'BELUM ADA ATLET',
+                            _atlitMerah?.namaLengkap?.toUpperCase() ??
+                                'BELUM ADA ATLET',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -2593,7 +3311,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             textAlign: TextAlign.right,
                           ),
                           Text(
-                            _atlitMerah?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
+                            _atlitMerah?.kontingen?.toUpperCase() ??
+                                'KONTINGEN -',
                             style: const TextStyle(
                               color: Color(0xFFFECDD3),
                               fontSize: 11,
@@ -2628,19 +3347,132 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     childAspectRatio: 1.85,
                     children: [
                       // Row 1
-                      _buildActionTile('Jatuhan +3', Icons.sports_martial_arts, const Color(0xFF059669), () => _handleKpAction('jatuhan', _atlitMerah, true, point: 3, label: 'Jatuhan (+3)'), isFilled: true, textColor: Colors.white),
-                      _buildActionTile('Binaan 2', Icons.front_hand_outlined, const Color(0xFF1E293B), () => _handleKpAction('binaan', _atlitMerah, true, point: 0, label: 'Binaan 2')),
-                      _buildActionTile('Binaan 1', Icons.touch_app_outlined, const Color(0xFF1E293B), () => _handleKpAction('binaan', _atlitMerah, true, point: 0, label: 'Binaan 1')),
+                      _buildActionTile(
+                        'Jatuhan +3',
+                        Icons.sports_martial_arts,
+                        const Color(0xFF059669),
+                        () => _handleKpAction(
+                          'jatuhan',
+                          _atlitMerah,
+                          true,
+                          point: 3,
+                          label: 'Jatuhan (+3)',
+                        ),
+                        isFilled: true,
+                        textColor: Colors.white,
+                      ),
+                      _buildActionTile(
+                        'Binaan 2',
+                        Icons.front_hand_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'binaan',
+                          _atlitMerah,
+                          true,
+                          point: 0,
+                          label: 'Binaan 2',
+                        ),
+                      ),
+                      _buildActionTile(
+                        'Binaan 1',
+                        Icons.touch_app_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'binaan',
+                          _atlitMerah,
+                          true,
+                          point: 0,
+                          label: 'Binaan 1',
+                        ),
+                      ),
 
                       // Row 2
-                      _buildActionTile('Jatuhan Batal', Icons.rotate_left, const Color(0xFF78350F), () => _handleKpAction('batal_jatuhan', _atlitMerah, true, point: -3, label: 'Jatuhan Batal (-3)'), isFilled: true, textColor: const Color(0xFFFDE68A)),
-                      _buildActionTile('Teguran 2 (-2)', Icons.looks_two_outlined, const Color(0xFF1E293B), () => _handleKpAction('teguran', _atlitMerah, true, point: -2, label: 'Teguran 2 (-2)'), badge: '-2', badgeColor: const Color(0xFFFB923C)),
-                      _buildActionTile('Teguran 1 (-1)', Icons.looks_one_outlined, const Color(0xFF1E293B), () => _handleKpAction('teguran', _atlitMerah, true, point: -1, label: 'Teguran 1 (-1)'), badge: '-1', badgeColor: const Color(0xFFFB923C)),
+                      _buildActionTile(
+                        'Jatuhan Batal',
+                        Icons.rotate_left,
+                        const Color(0xFF78350F),
+                        () => _handleKpAction(
+                          'batal_jatuhan',
+                          _atlitMerah,
+                          true,
+                          point: -3,
+                          label: 'Jatuhan Batal (-3)',
+                        ),
+                        isFilled: true,
+                        textColor: const Color(0xFFFDE68A),
+                      ),
+                      _buildActionTile(
+                        'Teguran 2 (-2)',
+                        Icons.looks_two_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'teguran',
+                          _atlitMerah,
+                          true,
+                          point: -2,
+                          label: 'Teguran 2 (-2)',
+                        ),
+                        badge: '-2',
+                        badgeColor: const Color(0xFFFB923C),
+                      ),
+                      _buildActionTile(
+                        'Teguran 1 (-1)',
+                        Icons.looks_one_outlined,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'teguran',
+                          _atlitMerah,
+                          true,
+                          point: -1,
+                          label: 'Teguran 1 (-1)',
+                        ),
+                        badge: '-1',
+                        badgeColor: const Color(0xFFFB923C),
+                      ),
 
                       // Row 3
-                      _buildActionTile('Diskualifikasi', Icons.do_not_disturb_on_total_silence, const Color(0xFF991B1B), () => _handleKpAction('diskualifikasi', _atlitMerah, true, point: 0, label: 'Diskualifikasi'), isFilled: true, textColor: Colors.white),
-                      _buildActionTile('Peringatan 2 (-10)', Icons.warning_amber_rounded, const Color(0xFF1E293B), () => _handleKpAction('pembinaan', _atlitMerah, true, point: -10, label: 'Peringatan 2 (-10)'), badge: '-10', badgeColor: const Color(0xFFF43F5E)),
-                      _buildActionTile('Peringatan 1 (-5)', Icons.gavel, const Color(0xFF1E293B), () => _handleKpAction('pembinaan', _atlitMerah, true, point: -5, label: 'Peringatan 1 (-5)'), badge: '-5', badgeColor: const Color(0xFFF43F5E)),
+                      _buildActionTile(
+                        'Diskualifikasi',
+                        Icons.do_not_disturb_on_total_silence,
+                        const Color(0xFF991B1B),
+                        () => _handleKpAction(
+                          'diskualifikasi',
+                          _atlitMerah,
+                          true,
+                          point: 0,
+                          label: 'Diskualifikasi',
+                        ),
+                        isFilled: true,
+                        textColor: Colors.white,
+                      ),
+                      _buildActionTile(
+                        'Peringatan 2 (-10)',
+                        Icons.warning_amber_rounded,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'pembinaan',
+                          _atlitMerah,
+                          true,
+                          point: -10,
+                          label: 'Peringatan 2 (-10)',
+                        ),
+                        badge: '-10',
+                        badgeColor: const Color(0xFFF43F5E),
+                      ),
+                      _buildActionTile(
+                        'Peringatan 1 (-5)',
+                        Icons.gavel,
+                        const Color(0xFF1E293B),
+                        () => _handleKpAction(
+                          'pembinaan',
+                          _atlitMerah,
+                          true,
+                          point: -5,
+                          label: 'Peringatan 1 (-5)',
+                        ),
+                        badge: '-5',
+                        badgeColor: const Color(0xFFF43F5E),
+                      ),
                     ],
                   ),
                 ),
@@ -2650,7 +3482,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                 // ── Vertical Log Nilai Masuk (Merah - 5 Latest) ──
                 Expanded(
                   flex: 2,
-                  child: _buildVerticalLogNilaiSection('LOG NILAI MASUK (MERAH):', history, const Color(0xFFFB7185)),
+                  child: _buildVerticalLogNilaiSection(
+                    'LOG NILAI MASUK (MERAH):',
+                    history,
+                    const Color(0xFFFB7185),
+                  ),
                 ),
               ],
             ),
@@ -2661,7 +3497,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   // ── KP Sanctions Status Bar (Binaan, Teguran, Peringatan) for Dewan Screen ──
-  Widget _buildKpSanctionsBar(int binaan, int teguran, int pembinaan, bool isRed) {
+  Widget _buildKpSanctionsBar(
+    int binaan,
+    int teguran,
+    int pembinaan,
+    bool isRed,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
       decoration: BoxDecoration(
@@ -2672,22 +3513,42 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       child: Row(
         children: [
           Expanded(
-            child: _buildSanctionPill('BINAAN', binaan, 2, const Color(0xFF6366F1)),
+            child: _buildSanctionPill(
+              'BINAAN',
+              binaan,
+              2,
+              const Color(0xFF6366F1),
+            ),
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: _buildSanctionPill('TEGURAN', teguran, 2, const Color(0xFFEA580C)),
+            child: _buildSanctionPill(
+              'TEGURAN',
+              teguran,
+              2,
+              const Color(0xFFEA580C),
+            ),
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: _buildSanctionPill('PERINGATAN', pembinaan, 2, const Color(0xFFE11D48)),
+            child: _buildSanctionPill(
+              'PERINGATAN',
+              pembinaan,
+              2,
+              const Color(0xFFE11D48),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSanctionPill(String label, int current, int max, Color themeColor) {
+  Widget _buildSanctionPill(
+    String label,
+    int current,
+    int max,
+    Color themeColor,
+  ) {
     final isActive = current > 0;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
@@ -2771,13 +3632,14 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 6.0),
               child: FractionallySizedBox(
-                widthFactor: 0.70,
+                widthFactor: 0.50,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.asset(
                     'assets/img/logo-small.webp',
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -2786,7 +3648,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
           // ── Digital Timer Box ──
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
             decoration: BoxDecoration(
               color: Colors.black,
               borderRadius: BorderRadius.circular(12),
@@ -2795,23 +3657,30 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: !_tandingStatus
                         ? const Color(0xFF1E293B)
                         : _isTimerRunning
-                            ? const Color(0xFF065F46)
-                            : const Color(0xFF78350F),
+                        ? const Color(0xFF065F46)
+                        : const Color(0xFF78350F),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
-                    'BABAK ${_selectedJadwal?.babak ?? '1'} • ${!_tandingStatus ? 'STANDBY' : _isTimerRunning ? 'BERJALAN' : 'DIJEDA'}',
+                    'BABAK ${_selectedJadwal?.babak ?? '1'} • ${!_tandingStatus
+                        ? 'STANDBY'
+                        : _isTimerRunning
+                        ? 'BERJALAN'
+                        : 'DIJEDA'}',
                     style: TextStyle(
                       color: !_tandingStatus
                           ? const Color(0xFF94A3B8)
                           : _isTimerRunning
-                              ? const Color(0xFF34D399)
-                              : const Color(0xFFFBBF24),
+                          ? const Color(0xFF34D399)
+                          : const Color(0xFFFBBF24),
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
                     ),
@@ -2857,7 +3726,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                      Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'MULAI',
@@ -2892,13 +3765,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             ),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: _isTimerRunning ? const Color(0xFFFBBF24) : Colors.transparent,
+                              color: _isTimerRunning
+                                  ? const Color(0xFFFBBF24)
+                                  : Colors.transparent,
                               width: 1.2,
                             ),
                             boxShadow: _isTimerRunning
                                 ? [
                                     BoxShadow(
-                                      color: const Color(0xFFD97706).withValues(alpha: 0.4),
+                                      color: const Color(
+                                        0xFFD97706,
+                                      ).withValues(alpha: 0.4),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -2908,7 +3785,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: const [
-                              Icon(Icons.pause_rounded, color: Colors.white, size: 24),
+                              Icon(
+                                Icons.pause_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                               SizedBox(height: 2),
                               Text(
                                 'JEDA',
@@ -2942,13 +3823,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             ),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: !_isTimerRunning ? const Color(0xFF34D399) : Colors.transparent,
+                              color: !_isTimerRunning
+                                  ? const Color(0xFF34D399)
+                                  : Colors.transparent,
                               width: 1.2,
                             ),
                             boxShadow: !_isTimerRunning
                                 ? [
                                     BoxShadow(
-                                      color: const Color(0xFF059669).withValues(alpha: 0.4),
+                                      color: const Color(
+                                        0xFF059669,
+                                      ).withValues(alpha: 0.4),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -2958,7 +3843,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: const [
-                              Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                              Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                               SizedBox(height: 2),
                               Text(
                                 'LANJUT',
@@ -3032,13 +3921,20 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF1E1B4B).withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF4C1D95).withValues(alpha: 0.5)),
+              border: Border.all(
+                color: const Color(0xFF4C1D95).withValues(alpha: 0.5),
+              ),
             ),
             child: Column(
               children: [
                 const Text(
                   'KENDALI DEWAN',
-                  style: TextStyle(color: Color(0xFFA78BFA), fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                  style: TextStyle(
+                    color: Color(0xFFA78BFA),
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
                 ),
                 const SizedBox(height: 8),
 
@@ -3050,7 +3946,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     onTap: _tandingStatus ? _startVerifikasiJatuhan : null,
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 11,
+                        horizontal: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: _tandingStatus
                             ? const LinearGradient(
@@ -3062,13 +3961,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         color: _tandingStatus ? null : const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _tandingStatus ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                          color: _tandingStatus
+                              ? const Color(0xFF38BDF8)
+                              : const Color(0xFF334155),
                           width: 1.2,
                         ),
                         boxShadow: _tandingStatus
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                                  color: const Color(
+                                    0xFF0284C7,
+                                  ).withValues(alpha: 0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -3080,14 +3983,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         children: [
                           Icon(
                             Icons.verified_user_rounded,
-                            color: _tandingStatus ? Colors.white : const Color(0xFF64748B),
+                            color: _tandingStatus
+                                ? Colors.white
+                                : const Color(0xFF64748B),
                             size: 26,
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'VERIFIKASI JATUHAN',
                             style: TextStyle(
-                              color: _tandingStatus ? Colors.white : const Color(0xFF64748B),
+                              color: _tandingStatus
+                                  ? Colors.white
+                                  : const Color(0xFF64748B),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -3108,12 +4015,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     behavior: HitTestBehavior.opaque,
                     onTap: _tandingStatus
                         ? () {
-                            _showSnack('Verifikasi Pelanggaran dipilih', const Color(0xFFD97706));
+                            _showSnack(
+                              'Verifikasi Pelanggaran dipilih',
+                              const Color(0xFFD97706),
+                            );
                           }
                         : null,
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 11,
+                        horizontal: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: _tandingStatus
                             ? const LinearGradient(
@@ -3125,13 +4038,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         color: _tandingStatus ? null : const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _tandingStatus ? const Color(0xFFFBBF24) : const Color(0xFF334155),
+                          color: _tandingStatus
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFF334155),
                           width: 1.2,
                         ),
                         boxShadow: _tandingStatus
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFFD97706).withValues(alpha: 0.3),
+                                  color: const Color(
+                                    0xFFD97706,
+                                  ).withValues(alpha: 0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -3143,14 +4060,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         children: [
                           Icon(
                             Icons.gavel_rounded,
-                            color: _tandingStatus ? Colors.white : const Color(0xFF64748B),
+                            color: _tandingStatus
+                                ? Colors.white
+                                : const Color(0xFF64748B),
                             size: 26,
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'VERIFIKASI PELANGGARAN',
                             style: TextStyle(
-                              color: _tandingStatus ? Colors.white : const Color(0xFF64748B),
+                              color: _tandingStatus
+                                  ? Colors.white
+                                  : const Color(0xFF64748B),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -3166,7 +4087,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                 // 3. Reset Babak Button
                 Opacity(
-                  opacity: (_tandingStatus || _selectedJadwal != null) ? 1.0 : 0.38,
+                  opacity: (_tandingStatus || _selectedJadwal != null)
+                      ? 1.0
+                      : 0.38,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: (_tandingStatus || _selectedJadwal != null)
@@ -3174,12 +4097,19 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         : null,
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 9,
+                        horizontal: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: (_tandingStatus || _selectedJadwal != null) ? const Color(0xFF5B21B6) : const Color(0xFF1E293B),
+                        color: (_tandingStatus || _selectedJadwal != null)
+                            ? const Color(0xFF5B21B6)
+                            : const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: (_tandingStatus || _selectedJadwal != null) ? const Color(0xFF8B5CF6).withValues(alpha: 0.7) : const Color(0xFF334155),
+                          color: (_tandingStatus || _selectedJadwal != null)
+                              ? const Color(0xFF8B5CF6).withValues(alpha: 0.7)
+                              : const Color(0xFF334155),
                         ),
                       ),
                       child: Column(
@@ -3187,14 +4117,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         children: [
                           Icon(
                             Icons.restart_alt,
-                            color: (_tandingStatus || _selectedJadwal != null) ? Colors.white : const Color(0xFF64748B),
+                            color: (_tandingStatus || _selectedJadwal != null)
+                                ? Colors.white
+                                : const Color(0xFF64748B),
                             size: 22,
                           ),
                           const SizedBox(height: 3),
                           Text(
                             'RESET BABAK',
                             style: TextStyle(
-                              color: (_tandingStatus || _selectedJadwal != null) ? Colors.white : const Color(0xFF64748B),
+                              color: (_tandingStatus || _selectedJadwal != null)
+                                  ? Colors.white
+                                  : const Color(0xFF64748B),
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                             ),
@@ -3242,7 +4176,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
               border: Border.all(
                 color: isFilled
                     ? Colors.transparent
-                    : (isEnabled ? const Color(0xFF334155).withValues(alpha: 0.8) : const Color(0xFF1E293B)),
+                    : (isEnabled
+                          ? const Color(0xFF334155).withValues(alpha: 0.8)
+                          : const Color(0xFF1E293B)),
                 width: 1.2,
               ),
               boxShadow: isFilled && isEnabled
@@ -3275,15 +4211,22 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     if (badge != null) ...[
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: isEnabled
-                              ? (badgeColor ?? Colors.amber).withValues(alpha: 0.25)
+                              ? (badgeColor ?? Colors.amber).withValues(
+                                  alpha: 0.25,
+                                )
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: isEnabled
-                                ? (badgeColor ?? Colors.amber).withValues(alpha: 0.6)
+                                ? (badgeColor ?? Colors.amber).withValues(
+                                    alpha: 0.6,
+                                  )
                                 : const Color(0xFF334155),
                             width: 0.8,
                           ),
@@ -3291,7 +4234,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         child: Text(
                           badge,
                           style: TextStyle(
-                            color: isEnabled ? (badgeColor ?? Colors.amber) : const Color(0xFF64748B),
+                            color: isEnabled
+                                ? (badgeColor ?? Colors.amber)
+                                : const Color(0xFF64748B),
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                           ),
@@ -3325,7 +4270,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   /// Vertical List displaying the 5 latest score logs
-  Widget _buildVerticalLogNilaiSection(String title, List<Nilai> history, Color accentColor) {
+  Widget _buildVerticalLogNilaiSection(
+    String title,
+    List<Nilai> history,
+    Color accentColor,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF030712).withValues(alpha: 0.8),
@@ -3364,13 +4313,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                 ? const Center(
                     child: Text(
                       'Belum ada riwayat nilai',
-                      style: TextStyle(color: Color(0xFF475569), fontSize: 10.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
                 : ListView.separated(
                     padding: EdgeInsets.zero,
                     itemCount: history.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 3),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 3),
                     itemBuilder: (ctx, idx) {
                       final n = history[idx];
                       return _buildLogRowItem(n);
@@ -3404,7 +4358,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       borderColor = const Color(0xFF10B981);
       textColor = const Color(0xFF6EE7B7);
       icon = Icons.sports_martial_arts_rounded;
-    } else if (jenis == 'batal_jatuhan' || jumlah == -3 || (jenis == 'jatuhan' && jumlah < 0)) {
+    } else if (jenis == 'batal_jatuhan' ||
+        jumlah == -3 ||
+        (jenis == 'jatuhan' && jumlah < 0)) {
       // 3. BATAL JATUHAN (-3): Zinc / Dark Gray theme
       bgColor = const Color(0xFF27272A).withValues(alpha: 0.6);
       borderColor = const Color(0xFF71717A);
@@ -3428,7 +4384,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       borderColor = const Color(0xFFEA580C);
       textColor = const Color(0xFFFDBA74);
       icon = Icons.warning_amber_rounded;
-    } else if (jenis == 'pembinaan' || jenis == 'peringatan' || jumlah == -5 || jumlah == -10) {
+    } else if (jenis == 'pembinaan' ||
+        jenis == 'peringatan' ||
+        jumlah == -5 ||
+        jumlah == -10) {
       // 7. PEMBINAAN / PERINGATAN (-5 / -10): Crimson / Rose theme
       bgColor = const Color(0xFF881337).withValues(alpha: 0.5);
       borderColor = const Color(0xFFE11D48);
@@ -3448,8 +4407,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     }
 
     final juriSource = (n.juriId != null && n.juriId!.isNotEmpty)
-        ? (n.juriId!.toLowerCase() == 'kp' ? 'Dewan (KP)' : n.juriId!.toUpperCase())
-        : (n.juriCount != null && n.juriCount! > 1 ? '${n.juriCount} Juri' : 'Juri');
+        ? (n.juriId!.toLowerCase() == 'kp'
+              ? 'Dewan (KP)'
+              : n.juriId!.toUpperCase())
+        : (n.juriCount != null && n.juriCount! > 1
+              ? '${n.juriCount} Juri'
+              : 'Juri');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
