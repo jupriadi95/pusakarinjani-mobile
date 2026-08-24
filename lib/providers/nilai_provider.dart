@@ -16,8 +16,13 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
 
   /// Fetch all sah (approved) nilai for both athletes in the current match.
   /// Merges authoritative server data with optimistic local scores so points never disappear.
-  Future<void> fetchNilai(String atlit1Id, String atlit2Id) async {
-    if (atlit1Id.isEmpty && atlit2Id.isEmpty) {
+  Future<void> fetchNilai(
+    String atlit1Id,
+    String atlit2Id, {
+    String? atlit1AltId,
+    String? atlit2AltId,
+  }) async {
+    if (atlit1Id.isEmpty && atlit2Id.isEmpty && (atlit1AltId == null || atlit1AltId.isEmpty) && (atlit2AltId == null || atlit2AltId.isEmpty)) {
       state = [];
       return;
     }
@@ -37,15 +42,17 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
           .where((n) => n.isSah)
           .toList();
 
-      // Filter scores that strictly belong to atlit1Id or atlit2Id
+      // Filter scores that strictly belong to atlit1 or atlit2
       final filteredList = fetchedList.where((n) {
         final doc = n.peserta?.documentId;
         final id = n.peserta?.id?.toString();
-        final matchesA1 = atlit1Id.isNotEmpty && (doc == atlit1Id || id == atlit1Id);
-        final matchesA2 = atlit2Id.isNotEmpty && (doc == atlit2Id || id == atlit2Id);
+        final matchesA1 = (atlit1Id.isNotEmpty && (doc == atlit1Id || id == atlit1Id)) ||
+                          (atlit1AltId != null && atlit1AltId.isNotEmpty && (doc == atlit1AltId || id == atlit1AltId));
+        final matchesA2 = (atlit2Id.isNotEmpty && (doc == atlit2Id || id == atlit2Id)) ||
+                          (atlit2AltId != null && atlit2AltId.isNotEmpty && (doc == atlit2AltId || id == atlit2AltId));
         if (matchesA1 || matchesA2) return true;
-        if (doc == null && n.sudut == 'biru' && atlit1Id.isNotEmpty) return true;
-        if (doc == null && n.sudut == 'merah' && atlit2Id.isNotEmpty) return true;
+        if (doc == null && n.sudut == 'biru' && (atlit1Id.isNotEmpty || (atlit1AltId != null && atlit1AltId.isNotEmpty))) return true;
+        if (doc == null && n.sudut == 'merah' && (atlit2Id.isNotEmpty || (atlit2AltId != null && atlit2AltId.isNotEmpty))) return true;
         return false;
       }).toList();
 
@@ -135,7 +142,22 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
     }
 
     if (existingIdx >= 0) {
-      list[existingIdx] = newNilai;
+      // Preserve existing athlete object if new incoming record has null relation
+      final existingPeserta = list[existingIdx].peserta;
+      final resolvedPeserta = newNilai.peserta ?? existingPeserta;
+      list[existingIdx] = Nilai(
+        id: newNilai.id ?? list[existingIdx].id,
+        documentId: newNilai.documentId ?? list[existingIdx].documentId,
+        peserta: resolvedPeserta,
+        jumlah: newNilai.jumlah ?? list[existingIdx].jumlah,
+        menitKe: newNilai.menitKe ?? list[existingIdx].menitKe,
+        jenis: newNilai.jenis ?? list[existingIdx].jenis,
+        status: newNilai.status ?? list[existingIdx].status,
+        sudut: newNilai.sudut ?? list[existingIdx].sudut,
+        juriId: newNilai.juriId ?? list[existingIdx].juriId,
+        juriCount: newNilai.juriCount ?? list[existingIdx].juriCount,
+        createdAt: newNilai.createdAt ?? list[existingIdx].createdAt,
+      );
       state = list;
     } else {
       state = [newNilai, ...state];

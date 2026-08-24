@@ -65,6 +65,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   StreamSubscription? _kpStatusSub;
   StreamSubscription? _pesertaDsqSub;
   StreamSubscription? _nilaiSub;
+  StreamSubscription? _nilaiKpSub;
   StreamSubscription? _verifikasiVoteSub;
   StreamSubscription? _timerControlSub;
   StreamSubscription? _babakChangedSub;
@@ -181,6 +182,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _nilaiSub = _socketService.onNilaiCreated.listen((n) {
       if (mounted) {
         ref.read(nilaiListProvider.notifier).addFromSocket(n);
+      }
+    });
+
+    // ── KP Nilai Socket Listener (Batal Jatuhan / Deductions) ──
+    _nilaiKpSub = _socketService.onNilaiKp.listen((data) {
+      if (!mounted) return;
+      try {
+        final nilai = Nilai.fromJson(Map<String, dynamic>.from(data));
+        ref.read(nilaiListProvider.notifier).addFromSocket(nilai);
+      } catch (e) {
+        debugPrint('[Dewan] Error parsing nilai:kp payload: $e');
       }
     });
 
@@ -795,8 +807,19 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           },
         });
         if (res['data'] != null && res['data'] is Map) {
-          final serverNilai = Nilai.fromJson(
-            Map<String, dynamic>.from(res['data'] as Map),
+          final serverData = Map<String, dynamic>.from(res['data'] as Map);
+          final serverNilai = Nilai(
+            id: serverData['id'] as int?,
+            documentId: serverData['documentId'] as String?,
+            peserta: atlit, // Preserves the athlete reference!
+            jumlah: -3,
+            menitKe: _formattedTimer,
+            status: 'sah',
+            jenis: 'batal_jatuhan',
+            sudut: isRed ? 'merah' : 'biru',
+            juriId: 'KP',
+            juriCount: 1,
+            createdAt: DateTime.now(),
           );
           // Update local state of Dewan with server-confirmed record
           ref.read(nilaiListProvider.notifier).addFromSocket(serverNilai);
@@ -815,6 +838,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             'sudut': isRed ? 'merah' : 'biru',
             'juri_id': 'KP',
             'juri_count': 1,
+            'babak': (_selectedJadwal?.babak ?? '1').toString(),
             'createdAt': DateTime.now().toIso8601String(),
           });
         }
@@ -2194,6 +2218,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _kpStatusSub?.cancel();
     _pesertaDsqSub?.cancel();
     _nilaiSub?.cancel();
+    _nilaiKpSub?.cancel();
     _verifikasiVoteSub?.cancel();
     _timerControlSub?.cancel();
     _babakChangedSub?.cancel();
@@ -2204,18 +2229,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   void _fetchNilai() {
-    final bId =
-        _atlitBiru?.documentId ??
-        _atlitBiru?.id?.toString() ??
-        _selectedJadwal?.biruPeserta?.documentId ??
-        '';
-    final mId =
-        _atlitMerah?.documentId ??
-        _atlitMerah?.id?.toString() ??
-        _selectedJadwal?.merahPeserta?.documentId ??
-        '';
-    if (bId.isNotEmpty || mId.isNotEmpty) {
-      ref.read(nilaiListProvider.notifier).fetchNilai(bId, mId);
+    final bDocId = _atlitBiru?.documentId ?? _selectedJadwal?.biruPeserta?.documentId ?? '';
+    final bAltId = _atlitBiru?.id?.toString() ?? _selectedJadwal?.biruPeserta?.id?.toString() ?? '';
+    final mDocId = _atlitMerah?.documentId ?? _selectedJadwal?.merahPeserta?.documentId ?? '';
+    final mAltId = _atlitMerah?.id?.toString() ?? _selectedJadwal?.merahPeserta?.id?.toString() ?? '';
+
+    if (bDocId.isNotEmpty || mDocId.isNotEmpty || bAltId.isNotEmpty || mAltId.isNotEmpty) {
+      ref.read(nilaiListProvider.notifier).fetchNilai(
+        bDocId,
+        mDocId,
+        atlit1AltId: bAltId,
+        atlit2AltId: mAltId,
+      );
     }
   }
 

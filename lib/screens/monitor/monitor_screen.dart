@@ -1961,6 +1961,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       return (bDoc != null && bDoc == _gelanggang?.atlit1Id) || (mDoc != null && mDoc == _gelanggang?.atlit2Id);
     }).firstOrNull;
 
+    final winnerAtlit = isBiruWin
+        ? (_atlit1 ?? activeJadwal?.biruPeserta)
+        : isMerahWin
+            ? (_atlit2 ?? activeJadwal?.merahPeserta)
+            : null;
+
+    final photoUrl = _resolveImageUrl(winnerAtlit?.actionFoto) ?? _resolveImageUrl(winnerAtlit?.pasFoto);
+
     final biruName = _atlit1?.namaLengkap ?? activeJadwal?.biruPeserta?.namaLengkap ?? 'Peserta Sudut Biru';
     final biruKontingen = _atlit1?.kontingen ?? activeJadwal?.biruPeserta?.kontingen ?? '-';
 
@@ -1982,8 +1990,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       color: Colors.black.withValues(alpha: 0.92),
       child: Center(
         child: Container(
-          width: 860,
-          padding: const EdgeInsets.all(28),
+          width: photoUrl != null ? 920 : 860,
+          padding: const EdgeInsets.all(26),
           decoration: BoxDecoration(
             color: const Color(0xFF090D16),
             borderRadius: BorderRadius.circular(28),
@@ -2001,28 +2009,28 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             children: [
               // Trophy Icon
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: winnerColor.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                   border: Border.all(color: winnerBorder, width: 2.0),
                 ),
-                child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFBBF24), size: 54),
+                child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFBBF24), size: 48),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Title
               const Text(
                 'PERTANDINGAN SELESAI',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5),
               ),
               const SizedBox(height: 4),
               Text(
                 'PEMENANG $winnerTitle',
                 style: TextStyle(
                   color: winnerBorder,
-                  fontSize: 32,
+                  fontSize: 30,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.0,
                 ),
@@ -2056,96 +2064,289 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 ),
               ],
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-              // Winner Athlete Box
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                decoration: BoxDecoration(
-                  color: winnerColor.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
-                ),
-                child: Column(
+              // ── Main Content: Dual-Column (Photo Left, Info Right) or Single-Column ──
+              if (photoUrl != null)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      winnerName.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
+                    // Athlete Action Photo (Left)
+                    Container(
+                      width: 220,
+                      height: 230,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: winnerBorder, width: 2.8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: winnerColor.withValues(alpha: 0.45),
+                            blurRadius: 22,
+                            spreadRadius: 2,
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            photoUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            errorBuilder: (ctx, err, stack) => Center(
+                              child: Icon(Icons.person_rounded, size: 84, color: winnerBorder.withValues(alpha: 0.6)),
+                            ),
+                            loadingBuilder: (ctx, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                            },
+                          ),
+                          // Bottom Gradient Shade
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: 70,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Bottom Corner Pill Tag
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: BoxDecoration(
+                                color: winnerColor.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.2),
+                              ),
+                              child: Text(
+                                winnerTitle,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      winnerKontingen.toUpperCase(),
-                      style: TextStyle(
-                        color: winnerBorder,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+
+                    const SizedBox(width: 20),
+
+                    // Winner Info Box & Final Scores (Right)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Winner Athlete Box
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+                            decoration: BoxDecoration(
+                              color: winnerColor.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  winnerName.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  winnerKontingen.toUpperCase(),
+                                  style: TextStyle(
+                                    color: winnerBorder,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Final Score Comparison Box
+                          Row(
+                            children: [
+                              // Blue Corner Final Score
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0369A1).withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        '$biruScore',
+                                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'VS',
+                                  style: TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+
+                              // Red Corner Final Score
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF9F1239).withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        '$merahScore',
+                                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
+                )
+              else
+                Column(
+                  children: [
+                    // Winner Athlete Box
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: winnerColor.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            winnerName.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            winnerKontingen.toUpperCase(),
+                            style: TextStyle(
+                              color: winnerBorder,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Final Score Comparison Box
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Blue Corner Final Score
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0369A1).withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text(
+                                '$biruScore',
+                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'VS',
+                            style: TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+
+                        // Red Corner Final Score
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9F1239).withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text(
+                                '$merahScore',
+                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // Final Score Comparison Box
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Blue Corner Final Score
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0369A1).withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
-                    ),
-                    child: Column(
-                      children: [
-                        const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                        Text(
-                          '$biruScore',
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      'VS',
-                      style: TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.w900),
-                    ),
-                  ),
-
-                  // Red Corner Final Score
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF9F1239).withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
-                    ),
-                    child: Column(
-                      children: [
-                        const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
-                        Text(
-                          '$merahScore',
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
 
               const SizedBox(height: 20),
 
