@@ -7,7 +7,8 @@ class Nilai {
   final Peserta? peserta;
   final int? jumlah;
   final String? menitKe;
-  final String? jenis; // 'pukulan' | 'tendangan' | 'jatuhan' | 'batal_jatuhan' | 'binaan' | 'teguran' | 'pembinaan' | 'diskualifikasi'
+  final String?
+  jenis; // 'pukulan' | 'tendangan' | 'jatuhan' | 'batal_jatuhan' | 'binaan' | 'teguran' | 'pembinaan' | 'diskualifikasi'
   final String? status; // 'sah' | 'ditolak' | 'buffered'
   final String? sudut; // 'merah' | 'biru'
   final String? juriId; // 'juri_1' | 'juri_2' | 'juri_3' | 'kp'
@@ -43,7 +44,9 @@ class Nilai {
         case 'tendangan':
           return 'Tendangan (+2)';
         case 'jatuhan':
-          return (jumlah != null && jumlah! < 0) ? 'Batal Jatuhan ($jumlah)' : 'Jatuhan (+3)';
+          return (jumlah != null && jumlah! < 0)
+              ? 'Batal Jatuhan ($jumlah)'
+              : 'Jatuhan (+3)';
         case 'batal_jatuhan':
           return 'Batal Jatuhan (-3)';
         case 'binaan':
@@ -85,15 +88,22 @@ class Nilai {
     Peserta? resolvedPeserta;
     if (json['peserta'] != null) {
       if (json['peserta'] is Map<String, dynamic>) {
-        resolvedPeserta = Peserta.fromJson(json['peserta'] as Map<String, dynamic>);
+        resolvedPeserta = Peserta.fromJson(
+          json['peserta'] as Map<String, dynamic>,
+        );
       } else if (json['peserta'] is Map) {
-        resolvedPeserta = Peserta.fromJson(Map<String, dynamic>.from(json['peserta'] as Map));
+        resolvedPeserta = Peserta.fromJson(
+          Map<String, dynamic>.from(json['peserta'] as Map),
+        );
       } else if (json['peserta'] is String || json['peserta'] is int) {
         final idStr = json['peserta'].toString();
         resolvedPeserta = Peserta(id: int.tryParse(idStr), documentId: idStr);
       }
-    } else if (json['atlet_id'] != null || json['atletId'] != null || json['peserta_id'] != null) {
-      final idStr = (json['atlet_id'] ?? json['atletId'] ?? json['peserta_id']).toString();
+    } else if (json['atlet_id'] != null ||
+        json['atletId'] != null ||
+        json['peserta_id'] != null) {
+      final idStr = (json['atlet_id'] ?? json['atletId'] ?? json['peserta_id'])
+          .toString();
       resolvedPeserta = Peserta(id: int.tryParse(idStr), documentId: idStr);
     }
 
@@ -115,18 +125,18 @@ class Nilai {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'documentId': documentId,
-        'peserta': peserta?.toJson(),
-        'jumlah': jumlah,
-        'menit_ke': menitKe,
-        'jenis': jenis,
-        'status': status,
-        'sudut': sudut,
-        'juri_id': juriId,
-        'juri_count': juriCount,
-        'createdAt': createdAt?.toIso8601String(),
-      };
+    'id': id,
+    'documentId': documentId,
+    'peserta': peserta?.toJson(),
+    'jumlah': jumlah,
+    'menit_ke': menitKe,
+    'jenis': jenis,
+    'status': status,
+    'sudut': sudut,
+    'juri_id': juriId,
+    'juri_count': juriCount,
+    'createdAt': createdAt?.toIso8601String(),
+  };
 
   Nilai copyWith({
     int? id,

@@ -76,7 +76,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   StreamSubscription? _connectionSub;
   StreamSubscription? _gelanggangSub;
   StreamSubscription? _nilaiSub;
-  StreamSubscription? _nilaiKpSub;   // Receives KP deductions persisted via REST
+  StreamSubscription? _nilaiKpSub; // Receives KP deductions persisted via REST
   StreamSubscription? _kpStatusSub;
   StreamSubscription? _pesertaDsqSub;
   StreamSubscription? _verifikasiMulaiSub;
@@ -85,7 +85,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   StreamSubscription? _timerControlSub;
   StreamSubscription? _babakChangedSub;
   StreamSubscription? _pertandinganSelesaiSub;
-  Timer? _fetchNilaiDebounce; // Debounce timer to prevent race condition on rapid kp:status events
+  Timer?
+  _fetchNilaiDebounce; // Debounce timer to prevent race condition on rapid kp:status events
 
   @override
   void initState() {
@@ -120,9 +121,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _startTimer();
       }
 
-      _socketService.connect(
-        gelanggangDocumentId: _gelanggang!.documentId,
-      );
+      _socketService.connect(gelanggangDocumentId: _gelanggang!.documentId);
     }
 
     _connectionSub = _socketService.onConnectionChanged.listen((connected) {
@@ -132,7 +131,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     _gelanggangSub = _socketService.onGelanggangUpdated.listen((updated) {
       if (mounted) {
         final wasBerlangsung = _gelanggang?.isBerlangsung ?? false;
-        final isNowFinished = updated.statusTanding == 'selesai' || (!updated.isBerlangsung && wasBerlangsung);
+        final isNowFinished =
+            updated.statusTanding == 'selesai' ||
+            (!updated.isBerlangsung && wasBerlangsung);
         final isStartingNewMatch = updated.isBerlangsung && !wasBerlangsung;
 
         // ONLY clear score when a match is started!
@@ -202,9 +203,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       final merah = (data['merah'] as Map?) ?? data;
       final biru = (data['biru'] as Map?) ?? data;
 
-      final statusDisiplin = (merah['statusDisiplin'] ?? biru['statusDisiplin'] ?? data['statusDisiplin'])?.toString();
+      final statusDisiplin =
+          (merah['statusDisiplin'] ??
+                  biru['statusDisiplin'] ??
+                  data['statusDisiplin'])
+              ?.toString();
       final aksi = data['aksi']?.toString();
-      final isDsq = statusDisiplin == 'diskualifikasi' || aksi == 'diskualifikasi';
+      final isDsq =
+          statusDisiplin == 'diskualifikasi' || aksi == 'diskualifikasi';
 
       setState(() {
         if (aksi == 'reset_babak') {
@@ -214,23 +220,45 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _kpTeguranBiru = 0;
         } else {
           if (data.containsKey('merah') || data['sudut'] == 'merah') {
-            _kpBinaanMerah = (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah) as int;
-            _kpTeguranMerah = (merah['teguran'] ?? merah['kp_teguran_merah'] ?? _kpTeguranMerah) as int;
-            _kpPembinaanMerah = (merah['pembinaan'] ?? merah['kp_pembinaan_merah'] ?? _kpPembinaanMerah) as int;
+            _kpBinaanMerah =
+                (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah)
+                    as int;
+            _kpTeguranMerah =
+                (merah['teguran'] ??
+                        merah['kp_teguran_merah'] ??
+                        _kpTeguranMerah)
+                    as int;
+            _kpPembinaanMerah =
+                (merah['pembinaan'] ??
+                        merah['kp_pembinaan_merah'] ??
+                        _kpPembinaanMerah)
+                    as int;
           }
 
           if (data.containsKey('biru') || data['sudut'] == 'biru') {
-            _kpBinaanBiru = (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru) as int;
-            _kpTeguranBiru = (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru) as int;
-            _kpPembinaanBiru = (biru['pembinaan'] ?? biru['kp_pembinaan_biru'] ?? _kpPembinaanBiru) as int;
+            _kpBinaanBiru =
+                (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru)
+                    as int;
+            _kpTeguranBiru =
+                (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru)
+                    as int;
+            _kpPembinaanBiru =
+                (biru['pembinaan'] ??
+                        biru['kp_pembinaan_biru'] ??
+                        _kpPembinaanBiru)
+                    as int;
           }
         }
 
         if (isDsq) {
           final sudut = (data['sudut'] ?? 'merah').toString().toLowerCase();
           _dsqSudut = sudut;
-          _dsqNama = (sudut == 'biru' ? _atlit1?.namaLengkap : _atlit2?.namaLengkap) ?? '';
-          _dsqMessage = data['keterangan']?.toString() ?? 'Peserta Sudut ${sudut.toUpperCase()} Diskualifikasi!';
+          _dsqNama =
+              (sudut == 'biru' ? _atlit1?.namaLengkap : _atlit2?.namaLengkap) ??
+              '';
+          _dsqMessage =
+              data['keterangan']?.toString() ??
+              'Peserta Sudut ${sudut.toUpperCase()} Diskualifikasi!';
           _pauseTimer();
           _showWinnerModal = true;
         }
@@ -248,8 +276,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     _pesertaDsqSub = _socketService.onPesertaDsq.listen((data) {
       if (!mounted) return;
       final sudut = (data['sudut'] ?? 'merah').toString().toLowerCase();
-      final nama = data['nama']?.toString() ?? (sudut == 'biru' ? _atlit1?.namaLengkap : _atlit2?.namaLengkap) ?? '';
-      final message = data['message']?.toString() ?? 'Peserta Sudut ${sudut.toUpperCase()} Diskualifikasi!';
+      final nama =
+          data['nama']?.toString() ??
+          (sudut == 'biru' ? _atlit1?.namaLengkap : _atlit2?.namaLengkap) ??
+          '';
+      final message =
+          data['message']?.toString() ??
+          'Peserta Sudut ${sudut.toUpperCase()} Diskualifikasi!';
 
       setState(() {
         _dsqSudut = sudut;
@@ -279,7 +312,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
     _verifikasiVoteSub = _socketService.onVerifikasiVote.listen((data) {
       if (!mounted || !_verifikasiActive) return;
-      final juriId = data['juriId']?.toString() ?? data['juri_id']?.toString() ?? '';
+      final juriId =
+          data['juriId']?.toString() ?? data['juri_id']?.toString() ?? '';
       final pilihan = data['pilihan']?.toString() ?? '';
 
       if (['juri_1', 'juri_2', 'juri_3'].contains(juriId)) {
@@ -287,7 +321,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _verifikasiVotes[juriId] = pilihan;
 
           // Check live consensus
-          final votes = _verifikasiVotes.values.where((v) => v != null).toList();
+          final votes = _verifikasiVotes.values
+              .where((v) => v != null)
+              .toList();
           final countBiru = votes.where((v) => v == 'biru').length;
           final countMerah = votes.where((v) => v == 'merah').length;
           final countInvalid = votes.where((v) => v == 'invalid').length;
@@ -379,7 +415,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     });
 
     // ── Match Completion / Finished Listener ──
-    _pertandinganSelesaiSub = _socketService.onPertandinganSelesai.listen((data) {
+    _pertandinganSelesaiSub = _socketService.onPertandinganSelesai.listen((
+      data,
+    ) {
       if (!mounted) return;
       final dsqSudut = data['dsqSudut']?.toString().toLowerCase();
       final dsqNama = data['dsqNama']?.toString();
@@ -422,10 +460,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   Future<void> _fetchPeserta(String docId, int dst) async {
     if (docId.isEmpty) return;
     try {
-      final response = await _api.findOneProtect('pesertas', docId, params: {
-        'populate[0]': 'action_foto',
-        'populate[1]': 'pas_foto',
-      });
+      final response = await _api.findOneProtect(
+        'pesertas',
+        docId,
+        params: {'populate[0]': 'action_foto', 'populate[1]': 'pas_foto'},
+      );
       final data = response['data'];
       if (data is Map<String, dynamic> && mounted) {
         setState(() {
@@ -472,7 +511,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     final match = list.where((j) {
       final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
       final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-      return (mId == a1 && bId == a2) || (mId == a2 && bId == a1) || j.statusTanding == 'berlangsung';
+      return (mId == a1 && bId == a2) ||
+          (mId == a2 && bId == a1) ||
+          j.statusTanding == 'berlangsung';
     }).firstOrNull;
 
     return match?.babak ?? '1';
@@ -516,7 +557,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             // Top bar with Back Button & Arena info
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -525,20 +569,33 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                         Navigator.of(context).pushReplacementNamed('/');
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                          color: const Color(
+                            0xFF0F172A,
+                          ).withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFF334155)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            Icon(Icons.arrow_back, color: Color(0xFF94A3B8), size: 16),
+                            Icon(
+                              Icons.arrow_back,
+                              color: Color(0xFF94A3B8),
+                              size: 16,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Kembali ke Portal',
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
@@ -546,12 +603,21 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     ),
 
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: (_isConnected ? const Color(0xFF065F46) : const Color(0xFF881337)).withValues(alpha: 0.6),
+                        color:
+                            (_isConnected
+                                    ? const Color(0xFF065F46)
+                                    : const Color(0xFF881337))
+                                .withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _isConnected ? const Color(0xFF10B981) : const Color(0xFFE11D48),
+                          color: _isConnected
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFE11D48),
                         ),
                       ),
                       child: Row(
@@ -562,14 +628,18 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                              color: _isConnected
+                                  ? const Color(0xFF34D399)
+                                  : const Color(0xFFFB7185),
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
                             _isConnected ? 'TERHUBUNG KE ARENA' : 'OFFLINE',
                             style: TextStyle(
-                              color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                              color: _isConnected
+                                  ? const Color(0xFF34D399)
+                                  : const Color(0xFFFB7185),
                               fontSize: 10.5,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.0,
@@ -593,13 +663,31 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
   Widget _buildActiveScoreboard() {
     final nilaiList = ref.watch(nilaiListProvider);
-    final a1Id = _atlit1?.documentId ?? _atlit1?.id?.toString() ?? _gelanggang?.atlit1Id ?? '';
-    final a2Id = _atlit2?.documentId ?? _atlit2?.id?.toString() ?? _gelanggang?.atlit2Id ?? '';
+    final a1Id =
+        _atlit1?.documentId ??
+        _atlit1?.id?.toString() ??
+        _gelanggang?.atlit1Id ??
+        '';
+    final a2Id =
+        _atlit2?.documentId ??
+        _atlit2?.id?.toString() ??
+        _gelanggang?.atlit2Id ??
+        '';
 
     final atlit1Score = countNilaiForPeserta(nilaiList, a1Id, sudut: 'biru');
     final atlit2Score = countNilaiForPeserta(nilaiList, a2Id, sudut: 'merah');
-    final atlit1Logs = recentNilaiForPeserta(nilaiList, a1Id, limit: 5, sudut: 'biru');
-    final atlit2Logs = recentNilaiForPeserta(nilaiList, a2Id, limit: 5, sudut: 'merah');
+    final atlit1Logs = recentNilaiForPeserta(
+      nilaiList,
+      a1Id,
+      limit: 5,
+      sudut: 'biru',
+    );
+    final atlit2Logs = recentNilaiForPeserta(
+      nilaiList,
+      a2Id,
+      limit: 5,
+      sudut: 'merah',
+    );
     final currentBabak = _resolveCurrentBabak();
 
     return Scaffold(
@@ -649,7 +737,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   // 2. Main Arena View: Dual Athlete Cards + Center Control Tower
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -705,7 +796,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             if (_verifikasiActive) _buildVerifikasiOverlay(),
 
             // ── 5. Winner Celebration Modal (Akhir Pertandingan) ──
-            if (_showWinnerModal) Positioned.fill(child: _buildWinnerModal(atlit1Score, atlit2Score)),
+            if (_showWinnerModal)
+              Positioned.fill(
+                child: _buildWinnerModal(atlit1Score, atlit2Score),
+              ),
           ],
         ),
       ),
@@ -720,7 +814,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF090D16).withValues(alpha: 0.95),
-        border: const Border(bottom: BorderSide(color: Color(0xFF1E293B), width: 1.2)),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFF1E293B), width: 1.2),
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -735,14 +831,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
-                child: const Icon(Icons.shield, color: Color(0xFF818CF8), size: 18),
+                child: const Icon(
+                  Icons.shield,
+                  color: Color(0xFF818CF8),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _gelanggang?.event?.namaEvent?.toUpperCase() ?? 'KEJUARAAN PENCAK SILAT 2026',
+                    _gelanggang?.event?.namaEvent?.toUpperCase() ??
+                        'KEJUARAAN PENCAK SILAT 2026',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -752,7 +853,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   ),
                   Text(
                     'Arena ${_gelanggang?.keterangan ?? _gelanggang?.kodeGelanggang ?? '-'}',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -767,7 +872,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
               ),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.8), width: 1.2),
+              border: Border.all(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.8),
+                width: 1.2,
+              ),
             ),
             child: Text(
               _gelanggang?.keterangan?.toUpperCase() ?? 'TANDING KELAS DEWASA',
@@ -784,12 +892,21 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: (_isConnected ? const Color(0xFF065F46) : const Color(0xFF881337)).withValues(alpha: 0.3),
+                  color:
+                      (_isConnected
+                              ? const Color(0xFF065F46)
+                              : const Color(0xFF881337))
+                          .withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: _isConnected ? const Color(0xFF10B981) : const Color(0xFFE11D48),
+                    color: _isConnected
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFFE11D48),
                     width: 1.0,
                   ),
                 ),
@@ -800,10 +917,16 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                        color: _isConnected
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFFFB7185),
                         boxShadow: [
                           BoxShadow(
-                            color: (_isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185)).withValues(alpha: 0.6),
+                            color:
+                                (_isConnected
+                                        ? const Color(0xFF34D399)
+                                        : const Color(0xFFFB7185))
+                                    .withValues(alpha: 0.6),
                             blurRadius: 6,
                           ),
                         ],
@@ -813,7 +936,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     Text(
                       _isConnected ? 'LIVE SCOREBOARD' : 'OFFLINE',
                       style: TextStyle(
-                        color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                        color: _isConnected
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFFFB7185),
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.0,
@@ -831,7 +956,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   Navigator.of(context).pushReplacementNamed('/');
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(6),
@@ -839,11 +967,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   ),
                   child: Row(
                     children: const [
-                      Icon(Icons.arrow_back, color: Color(0xFF94A3B8), size: 13),
+                      Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFF94A3B8),
+                        size: 13,
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'Keluar',
-                        style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 10.5, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: Color(0xFFCBD5E1),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -879,7 +1015,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 'assets/img/logo-small.webp',
                 width: double.infinity,
                 fit: BoxFit.fitWidth,
-                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
               ),
             ),
           ),
@@ -901,25 +1038,30 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _isTimerRunning
                         ? const Color(0xFF065F46)
                         : (_gelanggang?.statusTanding == 'berlangsung'
-                            ? const Color(0xFF78350F)
-                            : const Color(0xFF1E293B)),
+                              ? const Color(0xFF78350F)
+                              : const Color(0xFF1E293B)),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     _isTimerRunning
                         ? 'TIMER BERJALAN'
-                        : (_gelanggang?.statusTanding == 'berlangsung' ? 'WAKTU DIJEDA' : 'STANDBY'),
+                        : (_gelanggang?.statusTanding == 'berlangsung'
+                              ? 'WAKTU DIJEDA'
+                              : 'STANDBY'),
                     style: TextStyle(
                       color: _isTimerRunning
                           ? const Color(0xFF34D399)
                           : (_gelanggang?.statusTanding == 'berlangsung'
-                              ? const Color(0xFFFBBF24)
-                              : const Color(0xFF94A3B8)),
+                                ? const Color(0xFFFBBF24)
+                                : const Color(0xFF94A3B8)),
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.8,
@@ -952,7 +1094,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             ),
             child: const Text(
               'RONDE PERTANDINGAN',
-              style: TextStyle(color: Color(0xFFA78BFA), fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+              style: TextStyle(
+                color: Color(0xFFA78BFA),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
               textAlign: TextAlign.center,
             ),
           ),
@@ -1031,7 +1178,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               ),
               child: const Text(
                 'AKTIF',
-                style: TextStyle(color: Color(0xFFFDE68A), fontSize: 7.5, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: Color(0xFFFDE68A),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ],
@@ -1067,10 +1218,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           ];
     final gradientBegin = isRed ? Alignment.centerRight : Alignment.centerLeft;
     final gradientEnd = isRed ? Alignment.centerLeft : Alignment.centerRight;
-    final borderColor = isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8);
+    final borderColor = isRed
+        ? const Color(0xFFFB7185)
+        : const Color(0xFF38BDF8);
     final glowColor = isRed ? const Color(0xFFE11D48) : const Color(0xFF0284C7);
     final cornerTitle = isRed ? 'SUDUT MERAH' : 'SUDUT BIRU';
-    final photoUrl = _resolveImageUrl(atlit?.actionFoto) ?? _resolveImageUrl(atlit?.pasFoto);
+    final photoUrl =
+        _resolveImageUrl(atlit?.actionFoto) ?? _resolveImageUrl(atlit?.pasFoto);
 
     return Container(
       decoration: BoxDecoration(
@@ -1121,16 +1275,23 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.45),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: borderColor.withValues(alpha: 0.8)),
+                            border: Border.all(
+                              color: borderColor.withValues(alpha: 0.8),
+                            ),
                           ),
                           child: Text(
                             cornerTitle,
                             style: TextStyle(
-                              color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                              color: isRed
+                                  ? const Color(0xFFFB7185)
+                                  : const Color(0xFF38BDF8),
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.2,
@@ -1140,13 +1301,18 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                         if (_dsqSudut == (isRed ? 'merah' : 'biru')) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE11D48),
                               borderRadius: BorderRadius.circular(6),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE11D48).withValues(alpha: 0.7),
+                                  color: const Color(
+                                    0xFFE11D48,
+                                  ).withValues(alpha: 0.7),
                                   blurRadius: 8,
                                 ),
                               ],
@@ -1154,11 +1320,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: const [
-                                Icon(Icons.gavel, color: Colors.white, size: 12),
+                                Icon(
+                                  Icons.gavel,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'DISKUALIFIKASI',
-                                  style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1167,7 +1341,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.35),
                         borderRadius: BorderRadius.circular(6),
@@ -1175,7 +1352,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       child: Text(
                         atlit?.perguruan?.toUpperCase() ?? 'IPSI TANDING',
                         style: TextStyle(
-                          color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                          color: isRed
+                              ? const Color(0xFFFECDD3)
+                              : const Color(0xFFBAE6FD),
                           fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -1188,11 +1367,16 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
                 // ── Athlete Header Box (Name & Contingent Full Width) ──
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.38),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -1200,12 +1384,18 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: isRed ? const Color(0xFFE11D48).withValues(alpha: 0.3) : const Color(0xFF0284C7).withValues(alpha: 0.3),
-                          border: Border.all(color: borderColor.withValues(alpha: 0.6)),
+                          color: isRed
+                              ? const Color(0xFFE11D48).withValues(alpha: 0.3)
+                              : const Color(0xFF0284C7).withValues(alpha: 0.3),
+                          border: Border.all(
+                            color: borderColor.withValues(alpha: 0.6),
+                          ),
                         ),
                         child: Icon(
                           Icons.sports_martial_arts,
-                          color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                          color: isRed
+                              ? const Color(0xFFFB7185)
+                              : const Color(0xFF38BDF8),
                           size: 16,
                         ),
                       ),
@@ -1216,7 +1406,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              atlit?.namaLengkap?.toUpperCase() ?? 'BELUM ADA ATLET',
+                              atlit?.namaLengkap?.toUpperCase() ??
+                                  'BELUM ADA ATLET',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -1230,7 +1421,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                             Text(
                               atlit?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
                               style: TextStyle(
-                                color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                                color: isRed
+                                    ? const Color(0xFFFECDD3)
+                                    : const Color(0xFFBAE6FD),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1269,10 +1462,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 const SizedBox(height: 8),
 
                 // ── 50% Bawah: Score History Box ──
-                Expanded(
-                  flex: 1,
-                  child: _buildScoreHistoryList(logs, isRed),
-                ),
+                Expanded(flex: 1, child: _buildScoreHistoryList(logs, isRed)),
               ],
             ),
           ),
@@ -1299,10 +1489,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: borderColor, width: 2.0),
           boxShadow: [
-            BoxShadow(
-              color: glowColor.withValues(alpha: 0.35),
-              blurRadius: 18,
-            ),
+            BoxShadow(color: glowColor.withValues(alpha: 0.35), blurRadius: 18),
           ],
         ),
         child: Center(
@@ -1317,12 +1504,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   fontWeight: FontWeight.w900,
                   fontFamily: 'monospace',
                   color: Colors.white,
-                  shadows: [
-                    Shadow(
-                      color: glowColor,
-                      blurRadius: 24,
-                    ),
-                  ],
+                  shadows: [Shadow(color: glowColor, blurRadius: 24)],
                 ),
               ),
             ),
@@ -1338,12 +1520,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         decoration: BoxDecoration(
           color: Colors.black,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor.withValues(alpha: 0.9), width: 2.0),
+          border: Border.all(
+            color: borderColor.withValues(alpha: 0.9),
+            width: 2.0,
+          ),
           boxShadow: [
-            BoxShadow(
-              color: glowColor.withValues(alpha: 0.3),
-              blurRadius: 14,
-            ),
+            BoxShadow(color: glowColor.withValues(alpha: 0.3), blurRadius: 14),
           ],
         ),
         clipBehavior: Clip.antiAlias,
@@ -1351,7 +1533,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             ? Image.network(
                 photoUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => _buildLargePhotoPlaceholder(atlit, isRed),
+                errorBuilder: (ctx, err, stack) =>
+                    _buildLargePhotoPlaceholder(atlit, isRed),
               )
             : _buildLargePhotoPlaceholder(atlit, isRed),
       ),
@@ -1397,7 +1580,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             child: Text(
               atlit?.initials ?? '?',
               style: TextStyle(
-                color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                color: isRed
+                    ? const Color(0xFFFB7185)
+                    : const Color(0xFF38BDF8),
                 fontSize: 36,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2,
@@ -1410,25 +1595,50 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   }
 
   // ── KP Sanctions Pill Bar ──
-  Widget _buildKpSanctionsBar(int binaan, int teguran, int pembinaan, bool isRed) {
+  Widget _buildKpSanctionsBar(
+    int binaan,
+    int teguran,
+    int pembinaan,
+    bool isRed,
+  ) {
     return Row(
       children: [
         Expanded(
-          child: _buildSanctionPill('BINAAN', binaan, 2, const Color(0xFF6366F1)),
+          child: _buildSanctionPill(
+            'BINAAN',
+            binaan,
+            2,
+            const Color(0xFF6366F1),
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _buildSanctionPill('TEGURAN', teguran, 2, const Color(0xFFEA580C)),
+          child: _buildSanctionPill(
+            'TEGURAN',
+            teguran,
+            2,
+            const Color(0xFFEA580C),
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _buildSanctionPill('PERINGATAN', pembinaan, 2, const Color(0xFFE11D48)),
+          child: _buildSanctionPill(
+            'PERINGATAN',
+            pembinaan,
+            2,
+            const Color(0xFFE11D48),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSanctionPill(String label, int current, int max, Color themeColor) {
+  Widget _buildSanctionPill(
+    String label,
+    int current,
+    int max,
+    Color themeColor,
+  ) {
     final isActive = current > 0;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -1511,7 +1721,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               Text(
                 'RIWAYAT POIN TERAKHIR',
                 style: TextStyle(
-                  color: isRed ? const Color(0xFFFDA4AF) : const Color(0xFF7DD3FC),
+                  color: isRed
+                      ? const Color(0xFFFDA4AF)
+                      : const Color(0xFF7DD3FC),
                   fontSize: 9.5,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.6,
@@ -1519,7 +1731,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               ),
               Text(
                 '${logs.length}/5 TERBARU',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 8.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -1529,7 +1745,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 ? const Center(
                     child: Text(
                       'Belum ada riwayat poin',
-                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
                 : ListView.separated(
@@ -1566,7 +1786,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       borderColor = const Color(0xFF10B981);
       textColor = const Color(0xFF6EE7B7);
       icon = Icons.sports_martial_arts_rounded;
-    } else if (jenis == 'batal_jatuhan' || jumlah == -3 || (jenis == 'jatuhan' && jumlah < 0)) {
+    } else if (jenis == 'batal_jatuhan' ||
+        jumlah == -3 ||
+        (jenis == 'jatuhan' && jumlah < 0)) {
       bgColor = const Color(0xFF27272A).withValues(alpha: 0.6);
       borderColor = const Color(0xFF71717A);
       textColor = const Color(0xFFD4D4D8);
@@ -1586,7 +1808,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       borderColor = const Color(0xFFEA580C);
       textColor = const Color(0xFFFDBA74);
       icon = Icons.warning_amber_rounded;
-    } else if (jenis == 'pembinaan' || jenis == 'peringatan' || jumlah == -5 || jumlah == -10) {
+    } else if (jenis == 'pembinaan' ||
+        jenis == 'peringatan' ||
+        jumlah == -5 ||
+        jumlah == -10) {
       bgColor = const Color(0xFF881337).withValues(alpha: 0.5);
       borderColor = const Color(0xFFE11D48);
       textColor = const Color(0xFFFECDD3);
@@ -1634,7 +1859,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: borderColor.withValues(alpha: 0.4), width: 0.8),
+                border: Border.all(
+                  color: borderColor.withValues(alpha: 0.4),
+                  width: 0.8,
+                ),
               ),
               child: Text(
                 n.menitKe!,
@@ -1693,7 +1921,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       color: const Color(0xFF0284C7).withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF38BDF8), size: 32),
+                    child: const Icon(
+                      Icons.verified_user_rounded,
+                      color: Color(0xFF38BDF8),
+                      size: 32,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Column(
@@ -1710,7 +1942,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       ),
                       Text(
                         'Konsensus $totalVoted / 3 Juri Pertandingan Memberikan Keputusan',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -1771,20 +2007,23 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               if (_verifikasiHasil != null)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 22),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 18,
+                    horizontal: 22,
+                  ),
                   decoration: BoxDecoration(
                     color: _verifikasiHasil == 'biru'
                         ? const Color(0xFF0284C7).withValues(alpha: 0.6)
                         : _verifikasiHasil == 'merah'
-                            ? const Color(0xFFE11D48).withValues(alpha: 0.6)
-                            : const Color(0xFF1E293B).withValues(alpha: 0.85),
+                        ? const Color(0xFFE11D48).withValues(alpha: 0.6)
+                        : const Color(0xFF1E293B).withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: _verifikasiHasil == 'biru'
                           ? const Color(0xFF38BDF8)
                           : _verifikasiHasil == 'merah'
-                              ? const Color(0xFFFB7185)
-                              : const Color(0xFF94A3B8),
+                          ? const Color(0xFFFB7185)
+                          : const Color(0xFF94A3B8),
                       width: 3.0,
                     ),
                     boxShadow: [
@@ -1792,8 +2031,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                         color: _verifikasiHasil == 'biru'
                             ? const Color(0xFF0284C7).withValues(alpha: 0.55)
                             : _verifikasiHasil == 'merah'
-                                ? const Color(0xFFE11D48).withValues(alpha: 0.55)
-                                : Colors.black.withValues(alpha: 0.4),
+                            ? const Color(0xFFE11D48).withValues(alpha: 0.55)
+                            : Colors.black.withValues(alpha: 0.4),
                         blurRadius: 22,
                         offset: const Offset(0, 4),
                       ),
@@ -1803,7 +2042,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        _verifikasiHasil == 'invalid' ? Icons.cancel_outlined : Icons.check_circle_rounded,
+                        _verifikasiHasil == 'invalid'
+                            ? Icons.cancel_outlined
+                            : Icons.check_circle_rounded,
                         color: Colors.white,
                         size: 36,
                       ),
@@ -1837,12 +2078,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF38BDF8)),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Color(0xFF38BDF8),
+                        ),
                       ),
                       SizedBox(width: 12),
                       Text(
                         'Menunggu Input Keputusan 2 dari 3 Juri...',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
@@ -1866,24 +2114,25 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
       decoration: BoxDecoration(
-        color: hasVotes ? color.withValues(alpha: 0.35) : const Color(0xFF0F172A),
+        color: hasVotes
+            ? color.withValues(alpha: 0.35)
+            : const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasVotes ? borderColor : const Color(0xFF1E293B),
           width: hasVotes ? 2.2 : 1.2,
         ),
         boxShadow: hasVotes
-            ? [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.3),
-                  blurRadius: 14,
-                ),
-              ]
+            ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 14)]
             : null,
       ),
       child: Column(
         children: [
-          Icon(icon, color: hasVotes ? Colors.white : const Color(0xFF64748B), size: 36),
+          Icon(
+            icon,
+            color: hasVotes ? Colors.white : const Color(0xFF64748B),
+            size: 36,
+          ),
           const SizedBox(height: 8),
           Text(
             label,
@@ -1914,7 +2163,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: hasVotes ? borderColor : const Color(0xFF334155)),
+              border: Border.all(
+                color: hasVotes ? borderColor : const Color(0xFF334155),
+              ),
             ),
             child: Text(
               '$count JURI',
@@ -1942,49 +2193,60 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     final winnerColor = isBiruWin
         ? const Color(0xFF0284C7)
         : isMerahWin
-            ? const Color(0xFFE11D48)
-            : const Color(0xFFD97706);
+        ? const Color(0xFFE11D48)
+        : const Color(0xFFD97706);
     final winnerBorder = isBiruWin
         ? const Color(0xFF38BDF8)
         : isMerahWin
-            ? const Color(0xFFFB7185)
-            : const Color(0xFFFBBF24);
+        ? const Color(0xFFFB7185)
+        : const Color(0xFFFBBF24);
     final winnerTitle = isBiruWin
         ? 'SUDUT BIRU'
         : isMerahWin
-            ? 'SUDUT MERAH'
-            : 'SERI / DRAW';
+        ? 'SUDUT MERAH'
+        : 'SERI / DRAW';
     final jadwals = ref.watch(jadwalListProvider).valueOrNull ?? [];
     final activeJadwal = jadwals.where((j) {
       final bDoc = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
       final mDoc = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
-      return (bDoc != null && bDoc == _gelanggang?.atlit1Id) || (mDoc != null && mDoc == _gelanggang?.atlit2Id);
+      return (bDoc != null && bDoc == _gelanggang?.atlit1Id) ||
+          (mDoc != null && mDoc == _gelanggang?.atlit2Id);
     }).firstOrNull;
 
     final winnerAtlit = isBiruWin
         ? (_atlit1 ?? activeJadwal?.biruPeserta)
         : isMerahWin
-            ? (_atlit2 ?? activeJadwal?.merahPeserta)
-            : null;
+        ? (_atlit2 ?? activeJadwal?.merahPeserta)
+        : null;
 
-    final photoUrl = _resolveImageUrl(winnerAtlit?.actionFoto) ?? _resolveImageUrl(winnerAtlit?.pasFoto);
+    final photoUrl =
+        _resolveImageUrl(winnerAtlit?.actionFoto) ??
+        _resolveImageUrl(winnerAtlit?.pasFoto);
 
-    final biruName = _atlit1?.namaLengkap ?? activeJadwal?.biruPeserta?.namaLengkap ?? 'Peserta Sudut Biru';
-    final biruKontingen = _atlit1?.kontingen ?? activeJadwal?.biruPeserta?.kontingen ?? '-';
+    final biruName =
+        _atlit1?.namaLengkap ??
+        activeJadwal?.biruPeserta?.namaLengkap ??
+        'Peserta Sudut Biru';
+    final biruKontingen =
+        _atlit1?.kontingen ?? activeJadwal?.biruPeserta?.kontingen ?? '-';
 
-    final merahName = _atlit2?.namaLengkap ?? activeJadwal?.merahPeserta?.namaLengkap ?? 'Peserta Sudut Merah';
-    final merahKontingen = _atlit2?.kontingen ?? activeJadwal?.merahPeserta?.kontingen ?? '-';
+    final merahName =
+        _atlit2?.namaLengkap ??
+        activeJadwal?.merahPeserta?.namaLengkap ??
+        'Peserta Sudut Merah';
+    final merahKontingen =
+        _atlit2?.kontingen ?? activeJadwal?.merahPeserta?.kontingen ?? '-';
 
     final winnerName = isBiruWin
         ? biruName
         : isMerahWin
-            ? merahName
-            : 'Kedua Atlet Mendapat Skor Sama';
+        ? merahName
+        : 'Kedua Atlet Mendapat Skor Sama';
     final winnerKontingen = isBiruWin
         ? biruKontingen
         : isMerahWin
-            ? merahKontingen
-            : '-';
+        ? merahKontingen
+        : '-';
 
     return Container(
       color: Colors.black.withValues(alpha: 0.92),
@@ -2015,7 +2277,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: winnerBorder, width: 2.0),
                 ),
-                child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFBBF24), size: 48),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Color(0xFFFBBF24),
+                  size: 48,
+                ),
               ),
 
               const SizedBox(height: 10),
@@ -2023,7 +2289,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               // Title
               const Text(
                 'PERTANDINGAN SELESAI',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                style: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -2039,19 +2310,30 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               if (isDsq) ...[
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE11D48).withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFB7185), width: 1.5),
+                    border: Border.all(
+                      color: const Color(0xFFFB7185),
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.gavel, color: Color(0xFFFB7185), size: 18),
+                      const Icon(
+                        Icons.gavel,
+                        color: Color(0xFFFB7185),
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Text(
-                        _dsqMessage ?? 'MENANG DISKUALIFIKASI — Sudut ${_dsqSudut!.toUpperCase()} ${_dsqNama != null && _dsqNama!.isNotEmpty ? "($_dsqNama) " : ""}Terkena Diskualifikasi',
+                        _dsqMessage ??
+                            'MENANG DISKUALIFIKASI — Sudut ${_dsqSudut!.toUpperCase()} ${_dsqNama != null && _dsqNama!.isNotEmpty ? "($_dsqNama) " : ""}Terkena Diskualifikasi',
                         style: const TextStyle(
                           color: Color(0xFFFECDD3),
                           fontSize: 13,
@@ -2096,11 +2378,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                             fit: BoxFit.cover,
                             alignment: Alignment.topCenter,
                             errorBuilder: (ctx, err, stack) => Center(
-                              child: Icon(Icons.person_rounded, size: 84, color: winnerBorder.withValues(alpha: 0.6)),
+                              child: Icon(
+                                Icons.person_rounded,
+                                size: 84,
+                                color: winnerBorder.withValues(alpha: 0.6),
+                              ),
                             ),
                             loadingBuilder: (ctx, child, progress) {
                               if (progress == null) return child;
-                              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              );
                             },
                           ),
                           // Bottom Gradient Shade
@@ -2114,7 +2404,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
-                                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.85),
+                                  ],
                                 ),
                               ),
                             ),
@@ -2129,7 +2422,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                               decoration: BoxDecoration(
                                 color: winnerColor.withValues(alpha: 0.9),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.2),
+                                border: Border.all(
+                                  color: winnerBorder.withValues(alpha: 0.8),
+                                  width: 1.2,
+                                ),
                               ),
                               child: Text(
                                 winnerTitle,
@@ -2156,11 +2452,17 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                         children: [
                           // Winner Athlete Box
                           Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 18,
+                            ),
                             decoration: BoxDecoration(
                               color: winnerColor.withValues(alpha: 0.35),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
+                              border: Border.all(
+                                color: winnerBorder.withValues(alpha: 0.8),
+                                width: 1.8,
+                              ),
                             ),
                             child: Column(
                               children: [
@@ -2201,18 +2503,37 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                               // Blue Corner Final Score
                               Expanded(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0369A1).withValues(alpha: 0.4),
+                                    color: const Color(
+                                      0xFF0369A1,
+                                    ).withValues(alpha: 0.4),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
+                                    border: Border.all(
+                                      color: const Color(0xFF38BDF8),
+                                      width: isBiruWin ? 2.5 : 1.0,
+                                    ),
                                   ),
                                   child: Column(
                                     children: [
-                                      const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                      const Text(
+                                        'SUDUT BIRU',
+                                        style: TextStyle(
+                                          color: Color(0xFF38BDF8),
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                       Text(
                                         '$biruScore',
-                                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w900,
+                                          fontFamily: 'monospace',
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2223,25 +2544,48 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                                 padding: EdgeInsets.symmetric(horizontal: 12),
                                 child: Text(
                                   'VS',
-                                  style: TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.w900),
+                                  style: TextStyle(
+                                    color: Colors.amber,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
 
                               // Red Corner Final Score
                               Expanded(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF9F1239).withValues(alpha: 0.4),
+                                    color: const Color(
+                                      0xFF9F1239,
+                                    ).withValues(alpha: 0.4),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
+                                    border: Border.all(
+                                      color: const Color(0xFFFB7185),
+                                      width: isMerahWin ? 2.5 : 1.0,
+                                    ),
                                   ),
                                   child: Column(
                                     children: [
-                                      const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                      const Text(
+                                        'SUDUT MERAH',
+                                        style: TextStyle(
+                                          color: Color(0xFFFB7185),
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                       Text(
                                         '$merahScore',
-                                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w900,
+                                          fontFamily: 'monospace',
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2260,11 +2604,17 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     // Winner Athlete Box
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 20,
+                      ),
                       decoration: BoxDecoration(
                         color: winnerColor.withValues(alpha: 0.35),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: winnerBorder.withValues(alpha: 0.8), width: 1.8),
+                        border: Border.all(
+                          color: winnerBorder.withValues(alpha: 0.8),
+                          width: 1.8,
+                        ),
                       ),
                       child: Column(
                         children: [
@@ -2300,18 +2650,38 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       children: [
                         // Blue Corner Final Score
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0369A1).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFF0369A1,
+                            ).withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF38BDF8), width: isBiruWin ? 2.5 : 1.0),
+                            border: Border.all(
+                              color: const Color(0xFF38BDF8),
+                              width: isBiruWin ? 2.5 : 1.0,
+                            ),
                           ),
                           child: Column(
                             children: [
-                              const Text('SUDUT BIRU', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                              const Text(
+                                'SUDUT BIRU',
+                                style: TextStyle(
+                                  color: Color(0xFF38BDF8),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               Text(
                                 '$biruScore',
-                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'monospace',
+                                ),
                               ),
                             ],
                           ),
@@ -2321,24 +2691,48 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                           padding: EdgeInsets.symmetric(horizontal: 20),
                           child: Text(
                             'VS',
-                            style: TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              color: Colors.amber,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
 
                         // Red Corner Final Score
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9F1239).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFF9F1239,
+                            ).withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFFB7185), width: isMerahWin ? 2.5 : 1.0),
+                            border: Border.all(
+                              color: const Color(0xFFFB7185),
+                              width: isMerahWin ? 2.5 : 1.0,
+                            ),
                           ),
                           child: Column(
                             children: [
-                              const Text('SUDUT MERAH', style: TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
+                              const Text(
+                                'SUDUT MERAH',
+                                style: TextStyle(
+                                  color: Color(0xFFFB7185),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               Text(
                                 '$merahScore',
-                                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'monospace',
+                                ),
                               ),
                             ],
                           ),
@@ -2356,7 +2750,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   setState(() => _showWinnerModal = false);
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(10),
@@ -2364,7 +2761,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   ),
                   child: const Text(
                     'TUTUP BANNER PEMENANG',
-                    style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -2390,16 +2791,30 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         children: [
           const Text(
             'Sistem Scoreboard Arena Resmi IPSI © 2026',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           Row(
             children: [
-              Icon(Icons.cell_tower, color: _isConnected ? const Color(0xFF34D399) : const Color(0xFFFB7185), size: 13),
+              Icon(
+                Icons.cell_tower,
+                color: _isConnected
+                    ? const Color(0xFF34D399)
+                    : const Color(0xFFFB7185),
+                size: 13,
+              ),
               const SizedBox(width: 5),
               Text(
-                _isConnected ? 'Realtime Scoring Arena Sinkron' : 'Koneksi Terputus',
+                _isConnected
+                    ? 'Realtime Scoring Arena Sinkron'
+                    : 'Koneksi Terputus',
                 style: TextStyle(
-                  color: _isConnected ? const Color(0xFF94A3B8) : const Color(0xFFFB7185),
+                  color: _isConnected
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFFFB7185),
                   fontSize: 9.5,
                   fontWeight: FontWeight.w600,
                 ),

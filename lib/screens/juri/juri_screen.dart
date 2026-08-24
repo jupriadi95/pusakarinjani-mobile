@@ -105,9 +105,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
         _fetchPeserta(_gelanggang!.atlit2Id ?? '', 2);
       }
 
-      _socketService.connect(
-        gelanggangDocumentId: _gelanggang!.documentId,
-      );
+      _socketService.connect(gelanggangDocumentId: _gelanggang!.documentId);
     }
 
     _connectionSub = _socketService.onConnectionChanged.listen((connected) {
@@ -206,7 +204,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     });
 
     // ── Match Completion / Finished Listener ──
-    _pertandinganSelesaiSub = _socketService.onPertandinganSelesai.listen((data) {
+    _pertandinganSelesaiSub = _socketService.onPertandinganSelesai.listen((
+      data,
+    ) {
       if (!mounted) return;
       setState(() {
         if (_gelanggang != null) {
@@ -216,7 +216,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     });
   }
 
-  void _showVoteBanner(VoteStatusType type, String message, {int durationMs = 1500}) {
+  void _showVoteBanner(
+    VoteStatusType type,
+    String message, {
+    int durationMs = 1500,
+  }) {
     if (!mounted) return;
     _voteBannerTimer?.cancel();
     setState(() {
@@ -261,7 +265,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     final match = list.where((j) {
       final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
       final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-      return (mId == a1 && bId == a2) || (mId == a2 && bId == a1) || j.statusTanding == 'berlangsung';
+      return (mId == a1 && bId == a2) ||
+          (mId == a2 && bId == a1) ||
+          j.statusTanding == 'berlangsung';
     }).firstOrNull;
 
     return match?.documentId ?? '';
@@ -281,7 +287,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     final match = list.where((j) {
       final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
       final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-      return (mId == a1 && bId == a2) || (mId == a2 && bId == a1) || j.statusTanding == 'berlangsung';
+      return (mId == a1 && bId == a2) ||
+          (mId == a2 && bId == a1) ||
+          j.statusTanding == 'berlangsung';
     }).firstOrNull;
 
     return match?.babak ?? '1';
@@ -342,8 +350,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
       _verifikasiFinalVerdict = null;
     });
 
-    final atlitBiruName = data['atlitBiru']?['nama'] ?? _atlit1?.namaLengkap ?? 'Sudut Biru';
-    final atlitMerahName = data['atlitMerah']?['nama'] ?? _atlit2?.namaLengkap ?? 'Sudut Merah';
+    final atlitBiruName =
+        data['atlitBiru']?['nama'] ?? _atlit1?.namaLengkap ?? 'Sudut Biru';
+    final atlitMerahName =
+        data['atlitMerah']?['nama'] ?? _atlit2?.namaLengkap ?? 'Sudut Merah';
     final jenisTitle = (data['jenis'] ?? 'jatuhan').toString().toUpperCase();
 
     showDialog(
@@ -375,10 +385,16 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                                color: const Color(
+                                  0xFF0284C7,
+                                ).withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(Icons.verified_user_rounded, color: Color(0xFF38BDF8), size: 28),
+                              child: const Icon(
+                                Icons.verified_user_rounded,
+                                color: Color(0xFF38BDF8),
+                                size: 28,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Column(
@@ -395,7 +411,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                                 ),
                                 const Text(
                                   'Dewan Pertandingan meminta keputusan verifikasi dari para Juri',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -413,20 +432,23 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     if (_verifikasiFinalVerdict != null) ...[
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 16,
+                        ),
                         decoration: BoxDecoration(
                           color: _verifikasiFinalVerdict == 'biru'
                               ? const Color(0xFF0369A1).withValues(alpha: 0.4)
                               : _verifikasiFinalVerdict == 'merah'
-                                  ? const Color(0xFF9F1239).withValues(alpha: 0.4)
-                                  : const Color(0xFF334155).withValues(alpha: 0.5),
+                              ? const Color(0xFF9F1239).withValues(alpha: 0.4)
+                              : const Color(0xFF334155).withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: _verifikasiFinalVerdict == 'biru'
                                 ? const Color(0xFF38BDF8)
                                 : _verifikasiFinalVerdict == 'merah'
-                                    ? const Color(0xFFFB7185)
-                                    : const Color(0xFFCBD5E1),
+                                ? const Color(0xFFFB7185)
+                                : const Color(0xFFCBD5E1),
                             width: 2.0,
                           ),
                         ),
@@ -434,12 +456,14 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              _verifikasiFinalVerdict == 'invalid' ? Icons.cancel_outlined : Icons.check_circle_rounded,
+                              _verifikasiFinalVerdict == 'invalid'
+                                  ? Icons.cancel_outlined
+                                  : Icons.check_circle_rounded,
                               color: _verifikasiFinalVerdict == 'biru'
                                   ? const Color(0xFF38BDF8)
                                   : _verifikasiFinalVerdict == 'merah'
-                                      ? const Color(0xFFFB7185)
-                                      : const Color(0xFFCBD5E1),
+                                  ? const Color(0xFFFB7185)
+                                  : const Color(0xFFCBD5E1),
                               size: 26,
                             ),
                             const SizedBox(width: 12),
@@ -451,8 +475,8 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                                 color: _verifikasiFinalVerdict == 'biru'
                                     ? const Color(0xFF38BDF8)
                                     : _verifikasiFinalVerdict == 'merah'
-                                        ? const Color(0xFFFB7185)
-                                        : const Color(0xFFCBD5E1),
+                                    ? const Color(0xFFFB7185)
+                                    : const Color(0xFFCBD5E1),
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -463,55 +487,73 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // 3 Large Action Buttons (Silver/Invalid, Blue, Red)
+                    // 3 Large Action Buttons (Blue Left, Yellow/Invalid Center, Red Right)
                     Row(
                       children: [
-                        // 1. SILVER BUTTON: INVALID / TIDAK SAH
-                        Expanded(
-                          child: _buildVerifikasiActionButton(
-                            label: 'INVALID / TIDAK SAH',
-                            sublabel: 'Tidak ada poin jatuhan',
-                            icon: Icons.cancel_outlined,
-                            baseColor: const Color(0xFF64748B),
-                            gradientColors: [const Color(0xFF64748B), const Color(0xFF475569)],
-                            isSelected: _myVerifikasiVote == 'invalid',
-                            onTap: _verifikasiFinalVerdict != null
-                                ? null
-                                : () => _sendVerifikasiVote('invalid', setModalState),
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        // 2. BLUE BUTTON: JATUHAN SUDUT BIRU (+3)
+                        // 1. BLUE BUTTON: JATUHAN SUDUT BIRU (+3) (LEFT)
                         Expanded(
                           child: _buildVerifikasiActionButton(
                             label: 'JATUHAN BIRU (+3)',
                             sublabel: atlitBiruName,
                             icon: Icons.sports_martial_arts,
                             baseColor: const Color(0xFF0284C7),
-                            gradientColors: [const Color(0xFF0284C7), const Color(0xFF0369A1)],
+                            gradientColors: [
+                              const Color(0xFF0284C7),
+                              const Color(0xFF0369A1),
+                            ],
                             isSelected: _myVerifikasiVote == 'biru',
                             onTap: _verifikasiFinalVerdict != null
                                 ? null
-                                : () => _sendVerifikasiVote('biru', setModalState),
+                                : () => _sendVerifikasiVote(
+                                    'biru',
+                                    setModalState,
+                                  ),
                           ),
                         ),
 
                         const SizedBox(width: 12),
 
-                        // 3. RED BUTTON: JATUHAN SUDUT MERAH (+3)
+                        // 2. YELLOW / AMBER BUTTON: INVALID / TIDAK SAH (CENTER)
+                        Expanded(
+                          child: _buildVerifikasiActionButton(
+                            label: 'INVALID / TIDAK SAH',
+                            sublabel: 'Tidak ada poin jatuhan',
+                            icon: Icons.cancel_outlined,
+                            baseColor: const Color(0xFFD97706),
+                            gradientColors: [
+                              const Color(0xFFF59E0B),
+                              const Color(0xFFD97706),
+                            ],
+                            isSelected: _myVerifikasiVote == 'invalid',
+                            onTap: _verifikasiFinalVerdict != null
+                                ? null
+                                : () => _sendVerifikasiVote(
+                                    'invalid',
+                                    setModalState,
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // 3. RED BUTTON: JATUHAN SUDUT MERAH (+3) (RIGHT)
                         Expanded(
                           child: _buildVerifikasiActionButton(
                             label: 'JATUHAN MERAH (+3)',
                             sublabel: atlitMerahName,
                             icon: Icons.sports_martial_arts,
                             baseColor: const Color(0xFFE11D48),
-                            gradientColors: [const Color(0xFFE11D48), const Color(0xFFBE123C)],
+                            gradientColors: [
+                              const Color(0xFFE11D48),
+                              const Color(0xFFBE123C),
+                            ],
                             isSelected: _myVerifikasiVote == 'merah',
                             onTap: _verifikasiFinalVerdict != null
                                 ? null
-                                : () => _sendVerifikasiVote('merah', setModalState),
+                                : () => _sendVerifikasiVote(
+                                    'merah',
+                                    setModalState,
+                                  ),
                           ),
                         ),
                       ],
@@ -522,20 +564,35 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     // Status footer
                     if (_myVerifikasiVote != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF064E3B).withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6)),
+                          border: Border.all(
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.6),
+                          ),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.check_circle_outline, color: Color(0xFF34D399), size: 18),
+                            const Icon(
+                              Icons.check_circle_outline,
+                              color: Color(0xFF34D399),
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'Pilihan Anda [${_myVerifikasiVote!.toUpperCase()}] telah terkirim. Menunggu hasil konsensus juri lain...',
-                              style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Color(0xFF6EE7B7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -543,7 +600,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     else
                       const Text(
                         'Silakan tekan salah satu tombol di atas untuk menentukan keputusan Anda',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                   ],
                 ),
@@ -580,7 +641,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             ),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? Colors.white : baseColor.withValues(alpha: 0.8),
+              color: isSelected
+                  ? Colors.white
+                  : baseColor.withValues(alpha: 0.8),
               width: isSelected ? 3.0 : 1.5,
             ),
             boxShadow: [
@@ -621,7 +684,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               if (isSelected) ...[
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
@@ -631,7 +697,14 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     children: [
                       Icon(Icons.check, color: Colors.white, size: 14),
                       SizedBox(width: 4),
-                      Text('DIPILIH', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                      Text(
+                        'DIPILIH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -674,7 +747,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             SizedBox(width: 8),
             Text(
               'Pilih Identitas Juri',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -697,7 +774,12 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     );
   }
 
-  Widget _buildJuriChoiceTile(BuildContext ctx, String title, String id, IconData icon) {
+  Widget _buildJuriChoiceTile(
+    BuildContext ctx,
+    String title,
+    String id,
+    IconData icon,
+  ) {
     final isSelected = _selectedJuriId == id;
     return InkWell(
       onTap: () {
@@ -708,7 +790,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? PusakaTheme.indigo950.withValues(alpha: 0.6) : PusakaTheme.slate950,
+          color: isSelected
+              ? PusakaTheme.indigo950.withValues(alpha: 0.6)
+              : PusakaTheme.slate950,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? PusakaTheme.indigo500 : PusakaTheme.slate800,
@@ -717,7 +801,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? PusakaTheme.indigo400 : PusakaTheme.slate400, size: 22),
+            Icon(
+              icon,
+              color: isSelected ? PusakaTheme.indigo400 : PusakaTheme.slate400,
+              size: 22,
+            ),
             const SizedBox(width: 12),
             Text(
               title,
@@ -729,7 +817,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             ),
             const Spacer(),
             if (isSelected)
-              const Icon(Icons.check_circle, color: PusakaTheme.indigo400, size: 18),
+              const Icon(
+                Icons.check_circle,
+                color: PusakaTheme.indigo400,
+                size: 18,
+              ),
           ],
         ),
       ),
@@ -787,7 +879,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       Navigator.of(context).pushReplacementNamed('/');
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: PusakaTheme.slate900.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(10),
@@ -796,9 +891,20 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.arrow_back, color: PusakaTheme.slate400, size: 16),
+                          Icon(
+                            Icons.arrow_back,
+                            color: PusakaTheme.slate400,
+                            size: 16,
+                          ),
                           SizedBox(width: 6),
-                          Text('Keluar', style: TextStyle(color: PusakaTheme.slate300, fontSize: 11, fontWeight: FontWeight.w600)),
+                          Text(
+                            'Keluar',
+                            style: TextStyle(
+                              color: PusakaTheme.slate300,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -828,7 +934,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
         decoration: BoxDecoration(
           color: PusakaTheme.indigo950.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: PusakaTheme.indigo500.withValues(alpha: 0.6)),
+          border: Border.all(
+            color: PusakaTheme.indigo500.withValues(alpha: 0.6),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -845,7 +953,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               ),
             ),
             const SizedBox(width: 3),
-            const Icon(Icons.arrow_drop_down, color: PusakaTheme.indigo400, size: 14),
+            const Icon(
+              Icons.arrow_drop_down,
+              color: PusakaTheme.indigo400,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -877,7 +989,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               // Dual Scoring Columns with Center Round/Babak Divider
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1005,7 +1120,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: const Color(0xFF334155)),
                   ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white70, size: 16),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white70,
+                    size: 16,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1014,11 +1133,18 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                 children: [
                   Text(
                     _gelanggang?.event?.namaEvent ?? 'EVENT SILAT 2026',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   Text(
                     'Arena ${_gelanggang?.keterangan ?? _gelanggang?.kodeGelanggang ?? '-'}',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5),
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 9.5,
+                    ),
                   ),
                 ],
               ),
@@ -1059,9 +1185,15 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF1E1B4B),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF4338CA).withValues(alpha: 0.5)),
+              border: Border.all(
+                color: const Color(0xFF4338CA).withValues(alpha: 0.5),
+              ),
             ),
-            child: const Icon(Icons.timer_outlined, color: Color(0xFFA78BFA), size: 18),
+            child: const Icon(
+              Icons.timer_outlined,
+              color: Color(0xFFA78BFA),
+              size: 18,
+            ),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -1148,7 +1280,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               ),
               child: const Text(
                 'AKTIF',
-                style: TextStyle(color: Color(0xFFFDE68A), fontSize: 7.5, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: Color(0xFFFDE68A),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ],
@@ -1181,7 +1317,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
           ];
     final gradientBegin = isRed ? Alignment.centerRight : Alignment.centerLeft;
     final gradientEnd = isRed ? Alignment.centerLeft : Alignment.centerRight;
-    final borderColor = isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8);
+    final borderColor = isRed
+        ? const Color(0xFFFB7185)
+        : const Color(0xFF38BDF8);
     final glowColor = isRed ? const Color(0xFFE11D48) : const Color(0xFF0284C7);
     final watermarkText = isRed ? 'MERAH' : 'BIRU';
 
@@ -1232,16 +1370,23 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: borderColor.withValues(alpha: 0.7)),
+                        border: Border.all(
+                          color: borderColor.withValues(alpha: 0.7),
+                        ),
                       ),
                       child: Text(
                         isRed ? 'SUDUT MERAH' : 'SUDUT BIRU',
                         style: TextStyle(
-                          color: isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8),
+                          color: isRed
+                              ? const Color(0xFFFB7185)
+                              : const Color(0xFF38BDF8),
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.2,
@@ -1249,7 +1394,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2.5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.35),
                         borderRadius: BorderRadius.circular(6),
@@ -1257,7 +1405,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       child: Text(
                         atlitLabel,
                         style: TextStyle(
-                          color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                          color: isRed
+                              ? const Color(0xFFFECDD3)
+                              : const Color(0xFFBAE6FD),
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
                         ),
@@ -1271,11 +1421,16 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                 // ── Athlete Bar (Name + Contingent) ──
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1295,7 +1450,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                       Text(
                         atlit?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
                         style: TextStyle(
-                          color: isRed ? const Color(0xFFFECDD3) : const Color(0xFFBAE6FD),
+                          color: isRed
+                              ? const Color(0xFFFECDD3)
+                              : const Color(0xFFBAE6FD),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1368,7 +1525,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     final gradientColors = isRed
         ? const [Color(0xFFE11D48), Color(0xFFBE123C)]
         : const [Color(0xFF0284C7), Color(0xFF0369A1)];
-    final borderColor = isRed ? const Color(0xFFFB7185) : const Color(0xFF38BDF8);
+    final borderColor = isRed
+        ? const Color(0xFFFB7185)
+        : const Color(0xFF38BDF8);
     final glowColor = isRed ? const Color(0xFFE11D48) : const Color(0xFF0284C7);
 
     return Expanded(
@@ -1411,7 +1570,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
                 // Main content
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1424,7 +1586,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.25),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.35),
+                              ),
                             ),
                             child: Icon(icon, color: Colors.white, size: 34),
                           ),
@@ -1458,7 +1622,10 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
                       // Right: Big Point Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(14),
@@ -1504,7 +1671,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
         children: [
           const Text(
             'Sistem Konsensus Multi-Juri IPSI © 2026',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 8.5, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 8.5,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           Row(
             children: [
@@ -1512,7 +1683,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               const SizedBox(width: 3),
               Text(
                 'Posisi: Juri $juriNum | Konsensus 2 dari 3 Juri (< 1s)',
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 8.5, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),

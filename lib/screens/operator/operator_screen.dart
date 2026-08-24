@@ -2229,18 +2229,30 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   void _fetchNilai() {
-    final bDocId = _atlitBiru?.documentId ?? _selectedJadwal?.biruPeserta?.documentId ?? '';
-    final bAltId = _atlitBiru?.id?.toString() ?? _selectedJadwal?.biruPeserta?.id?.toString() ?? '';
-    final mDocId = _atlitMerah?.documentId ?? _selectedJadwal?.merahPeserta?.documentId ?? '';
-    final mAltId = _atlitMerah?.id?.toString() ?? _selectedJadwal?.merahPeserta?.id?.toString() ?? '';
+    final bDocId =
+        _atlitBiru?.documentId ??
+        _selectedJadwal?.biruPeserta?.documentId ??
+        '';
+    final bAltId =
+        _atlitBiru?.id?.toString() ??
+        _selectedJadwal?.biruPeserta?.id?.toString() ??
+        '';
+    final mDocId =
+        _atlitMerah?.documentId ??
+        _selectedJadwal?.merahPeserta?.documentId ??
+        '';
+    final mAltId =
+        _atlitMerah?.id?.toString() ??
+        _selectedJadwal?.merahPeserta?.id?.toString() ??
+        '';
 
-    if (bDocId.isNotEmpty || mDocId.isNotEmpty || bAltId.isNotEmpty || mAltId.isNotEmpty) {
-      ref.read(nilaiListProvider.notifier).fetchNilai(
-        bDocId,
-        mDocId,
-        atlit1AltId: bAltId,
-        atlit2AltId: mAltId,
-      );
+    if (bDocId.isNotEmpty ||
+        mDocId.isNotEmpty ||
+        bAltId.isNotEmpty ||
+        mAltId.isNotEmpty) {
+      ref
+          .read(nilaiListProvider.notifier)
+          .fetchNilai(bDocId, mDocId, atlit1AltId: bAltId, atlit2AltId: mAltId);
     }
   }
 
@@ -3033,12 +3045,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 6),
-
-                // ── KP Sanctions Status Bar (Binaan, Teguran, Peringatan) ──
-                _buildKpSanctionsBar(binaan, teguran, pembinaan, false),
-
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
 
                 // ── Exact 3x3 Button Grid (Taller aspect ratio for big icons & labels) ──
                 Expanded(
@@ -3056,25 +3063,33 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Binaan 1',
                         Icons.touch_app_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'binaan',
-                          _atlitBiru,
-                          false,
-                          point: 0,
-                          label: 'Binaan 1',
-                        ),
+                        binaan >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'binaan',
+                                _atlitBiru,
+                                false,
+                                point: 0,
+                                label: 'Binaan 1',
+                              ),
+                        isActive: binaan >= 1,
+                        activeColor: const Color(0xFF6366F1),
                       ),
                       _buildActionTile(
                         'Binaan 2',
                         Icons.front_hand_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'binaan',
-                          _atlitBiru,
-                          false,
-                          point: 0,
-                          label: 'Binaan 2',
-                        ),
+                        binaan >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'binaan',
+                                _atlitBiru,
+                                false,
+                                point: 0,
+                                label: 'Binaan 2',
+                              ),
+                        isActive: binaan >= 2,
+                        activeColor: const Color(0xFF6366F1),
                       ),
                       _buildActionTile(
                         'Jatuhan +3',
@@ -3096,13 +3111,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 1 (-1)',
                         Icons.looks_one_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'teguran',
-                          _atlitBiru,
-                          false,
-                          point: -1,
-                          label: 'Teguran 1 (-1)',
-                        ),
+                        teguran >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'teguran',
+                                _atlitBiru,
+                                false,
+                                point: -1,
+                                label: 'Teguran 1 (-1)',
+                              ),
+                        isActive: teguran >= 1,
+                        activeColor: const Color(0xFFEA580C),
                         badge: '-1',
                         badgeColor: const Color(0xFFFB923C),
                       ),
@@ -3110,13 +3129,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'teguran',
-                          _atlitBiru,
-                          false,
-                          point: -2,
-                          label: 'Teguran 2 (-2)',
-                        ),
+                        teguran >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'teguran',
+                                _atlitBiru,
+                                false,
+                                point: -2,
+                                label: 'Teguran 2 (-2)',
+                              ),
+                        isActive: teguran >= 2,
+                        activeColor: const Color(0xFFEA580C),
                         badge: '-2',
                         badgeColor: const Color(0xFFFB923C),
                       ),
@@ -3140,13 +3163,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 1 (-5)',
                         Icons.gavel,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'pembinaan',
-                          _atlitBiru,
-                          false,
-                          point: -5,
-                          label: 'Peringatan 1 (-5)',
-                        ),
+                        pembinaan >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'pembinaan',
+                                _atlitBiru,
+                                false,
+                                point: -5,
+                                label: 'Peringatan 1 (-5)',
+                              ),
+                        isActive: pembinaan >= 1,
+                        activeColor: const Color(0xFFE11D48),
                         badge: '-5',
                         badgeColor: const Color(0xFFF43F5E),
                       ),
@@ -3154,13 +3181,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'pembinaan',
-                          _atlitBiru,
-                          false,
-                          point: -10,
-                          label: 'Peringatan 2 (-10)',
-                        ),
+                        pembinaan >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'pembinaan',
+                                _atlitBiru,
+                                false,
+                                point: -10,
+                                label: 'Peringatan 2 (-10)',
+                              ),
+                        isActive: pembinaan >= 2,
+                        activeColor: const Color(0xFFE11D48),
                         badge: '-10',
                         badgeColor: const Color(0xFFF43F5E),
                       ),
@@ -3353,12 +3384,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 6),
-
-                // ── KP Sanctions Status Bar (Binaan, Teguran, Peringatan) ──
-                _buildKpSanctionsBar(binaan, teguran, pembinaan, true),
-
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
 
                 // ── Exact 3x3 Button Grid (Taller aspect ratio for big icons & labels) ──
                 Expanded(
@@ -3390,25 +3416,33 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Binaan 2',
                         Icons.front_hand_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'binaan',
-                          _atlitMerah,
-                          true,
-                          point: 0,
-                          label: 'Binaan 2',
-                        ),
+                        binaan >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'binaan',
+                                _atlitMerah,
+                                true,
+                                point: 0,
+                                label: 'Binaan 2',
+                              ),
+                        isActive: binaan >= 2,
+                        activeColor: const Color(0xFF6366F1),
                       ),
                       _buildActionTile(
                         'Binaan 1',
                         Icons.touch_app_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'binaan',
-                          _atlitMerah,
-                          true,
-                          point: 0,
-                          label: 'Binaan 1',
-                        ),
+                        binaan >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'binaan',
+                                _atlitMerah,
+                                true,
+                                point: 0,
+                                label: 'Binaan 1',
+                              ),
+                        isActive: binaan >= 1,
+                        activeColor: const Color(0xFF6366F1),
                       ),
 
                       // Row 2
@@ -3430,13 +3464,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'teguran',
-                          _atlitMerah,
-                          true,
-                          point: -2,
-                          label: 'Teguran 2 (-2)',
-                        ),
+                        teguran >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'teguran',
+                                _atlitMerah,
+                                true,
+                                point: -2,
+                                label: 'Teguran 2 (-2)',
+                              ),
+                        isActive: teguran >= 2,
+                        activeColor: const Color(0xFFEA580C),
                         badge: '-2',
                         badgeColor: const Color(0xFFFB923C),
                       ),
@@ -3444,13 +3482,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 1 (-1)',
                         Icons.looks_one_outlined,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'teguran',
-                          _atlitMerah,
-                          true,
-                          point: -1,
-                          label: 'Teguran 1 (-1)',
-                        ),
+                        teguran >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'teguran',
+                                _atlitMerah,
+                                true,
+                                point: -1,
+                                label: 'Teguran 1 (-1)',
+                              ),
+                        isActive: teguran >= 1,
+                        activeColor: const Color(0xFFEA580C),
                         badge: '-1',
                         badgeColor: const Color(0xFFFB923C),
                       ),
@@ -3474,13 +3516,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'pembinaan',
-                          _atlitMerah,
-                          true,
-                          point: -10,
-                          label: 'Peringatan 2 (-10)',
-                        ),
+                        pembinaan >= 2
+                            ? null
+                            : () => _handleKpAction(
+                                'pembinaan',
+                                _atlitMerah,
+                                true,
+                                point: -10,
+                                label: 'Peringatan 2 (-10)',
+                              ),
+                        isActive: pembinaan >= 2,
+                        activeColor: const Color(0xFFE11D48),
                         badge: '-10',
                         badgeColor: const Color(0xFFF43F5E),
                       ),
@@ -3488,13 +3534,17 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 1 (-5)',
                         Icons.gavel,
                         const Color(0xFF1E293B),
-                        () => _handleKpAction(
-                          'pembinaan',
-                          _atlitMerah,
-                          true,
-                          point: -5,
-                          label: 'Peringatan 1 (-5)',
-                        ),
+                        pembinaan >= 1
+                            ? null
+                            : () => _handleKpAction(
+                                'pembinaan',
+                                _atlitMerah,
+                                true,
+                                point: -5,
+                                label: 'Peringatan 1 (-5)',
+                              ),
+                        isActive: pembinaan >= 1,
+                        activeColor: const Color(0xFFE11D48),
                         badge: '-5',
                         badgeColor: const Color(0xFFF43F5E),
                       ),
@@ -3517,123 +3567,6 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── KP Sanctions Status Bar (Binaan, Teguran, Peringatan) for Dewan Screen ──
-  Widget _buildKpSanctionsBar(
-    int binaan,
-    int teguran,
-    int pembinaan,
-    bool isRed,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildSanctionPill(
-              'BINAAN',
-              binaan,
-              2,
-              const Color(0xFF6366F1),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _buildSanctionPill(
-              'TEGURAN',
-              teguran,
-              2,
-              const Color(0xFFEA580C),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _buildSanctionPill(
-              'PERINGATAN',
-              pembinaan,
-              2,
-              const Color(0xFFE11D48),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSanctionPill(
-    String label,
-    int current,
-    int max,
-    Color themeColor,
-  ) {
-    final isActive = current > 0;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-      decoration: BoxDecoration(
-        color: isActive
-            ? themeColor.withValues(alpha: 0.32)
-            : Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isActive ? themeColor : const Color(0xFF334155),
-          width: isActive ? 1.4 : 1.0,
-        ),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: themeColor.withValues(alpha: 0.35),
-                  blurRadius: 6,
-                  offset: const Offset(0, 1),
-                ),
-              ]
-            : null,
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$label: ',
-              style: TextStyle(
-                color: isActive ? Colors.white : const Color(0xFFCBD5E1),
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.5,
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? themeColor.withValues(alpha: 0.5)
-                    : const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: isActive ? themeColor : const Color(0xFF475569),
-                  width: 0.8,
-                ),
-              ),
-              child: Text(
-                '$current/$max',
-                style: TextStyle(
-                  color: isActive ? Colors.white : const Color(0xFF94A3B8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -4178,35 +4111,69 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     String label,
     IconData icon,
     Color bgColor,
-    VoidCallback onTap, {
+    VoidCallback? onTap, {
     bool isFilled = false,
+    bool isActive = false,
+    Color activeColor = const Color(0xFF6366F1),
     Color textColor = Colors.white70,
     String? badge,
     Color? badgeColor,
   }) {
     final isEnabled = _tandingStatus;
+    final canTap = isEnabled && !isActive && onTap != null;
+
+    final effectiveBgColor = isActive
+        ? activeColor
+        : isFilled
+        ? (isEnabled ? bgColor : const Color(0xFF1E293B))
+        : const Color(0xFF090E1A).withValues(alpha: 0.78);
+
+    final effectiveBorderColor = isActive
+        ? Colors.white.withValues(alpha: 0.9)
+        : isFilled
+        ? Colors.transparent
+        : (isEnabled
+              ? const Color(0xFF334155).withValues(alpha: 0.8)
+              : const Color(0xFF1E293B));
+
+    final effectiveIconColor = isActive
+        ? Colors.white
+        : isEnabled
+        ? (isFilled ? textColor : const Color(0xFFCBD5E1))
+        : const Color(0xFF64748B);
+
+    final effectiveTextColor = isActive
+        ? Colors.white
+        : isEnabled
+        ? (isFilled ? textColor : Colors.white)
+        : const Color(0xFF64748B);
+
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.35,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: isEnabled ? onTap : null,
+          onTap: canTap ? onTap : null,
           borderRadius: BorderRadius.circular(10),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              color: isFilled
-                  ? (isEnabled ? bgColor : const Color(0xFF1E293B))
-                  : const Color(0xFF090E1A).withValues(alpha: 0.78),
+              color: effectiveBgColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: isFilled
-                    ? Colors.transparent
-                    : (isEnabled
-                          ? const Color(0xFF334155).withValues(alpha: 0.8)
-                          : const Color(0xFF1E293B)),
-                width: 1.2,
+                color: effectiveBorderColor,
+                width: isActive ? 1.8 : 1.2,
               ),
-              boxShadow: isFilled && isEnabled
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: activeColor.withValues(alpha: 0.65),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 1),
+                      ),
+                    ]
+                  : (isFilled && isEnabled)
                   ? [
                       BoxShadow(
                         color: bgColor.withValues(alpha: 0.35),
@@ -4227,10 +4194,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      icon,
-                      color: isEnabled
-                          ? (isFilled ? textColor : const Color(0xFFCBD5E1))
-                          : const Color(0xFF64748B),
+                      isActive ? Icons.check_circle_rounded : icon,
+                      color: effectiveIconColor,
                       size: 26, // Enlarged icon
                     ),
                     if (badge != null) ...[
@@ -4241,14 +4206,18 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: isEnabled
+                          color: isActive
+                              ? Colors.black.withValues(alpha: 0.35)
+                              : isEnabled
                               ? (badgeColor ?? Colors.amber).withValues(
                                   alpha: 0.25,
                                 )
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: isEnabled
+                            color: isActive
+                                ? Colors.white.withValues(alpha: 0.8)
+                                : isEnabled
                                 ? (badgeColor ?? Colors.amber).withValues(
                                     alpha: 0.6,
                                   )
@@ -4259,7 +4228,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         child: Text(
                           badge,
                           style: TextStyle(
-                            color: isEnabled
+                            color: isActive
+                                ? Colors.white
+                                : isEnabled
                                 ? (badgeColor ?? Colors.amber)
                                 : const Color(0xFF64748B),
                             fontSize: 10,
@@ -4275,9 +4246,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                 Text(
                   label,
                   style: TextStyle(
-                    color: isEnabled
-                        ? (isFilled ? textColor : Colors.white)
-                        : const Color(0xFF64748B),
+                    color: effectiveTextColor,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
