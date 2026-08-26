@@ -1888,6 +1888,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     final countMerah = votes.where((v) => v == 'merah').length;
     final countInvalid = votes.where((v) => v == 'invalid').length;
     final totalVoted = votes.where((v) => v != null).length;
+    final isPelanggaran = _verifikasiJenis.toLowerCase() == 'pelanggaran';
     final jenisTitle = _verifikasiJenis.toUpperCase();
 
     return Container(
@@ -1899,10 +1900,18 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF090D16),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFF0284C7), width: 3.0),
+            border: Border.all(
+              color: isPelanggaran
+                  ? const Color(0xFFD97706)
+                  : const Color(0xFF0284C7),
+              width: 3.0,
+            ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0284C7).withValues(alpha: 0.5),
+                color: (isPelanggaran
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF0284C7))
+                    .withValues(alpha: 0.5),
                 blurRadius: 36,
                 spreadRadius: 4,
               ),
@@ -1918,12 +1927,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                      color: (isPelanggaran
+                              ? const Color(0xFFD97706)
+                              : const Color(0xFF0284C7))
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
-                      Icons.verified_user_rounded,
-                      color: Color(0xFF38BDF8),
+                    child: Icon(
+                      isPelanggaran
+                          ? Icons.gavel_rounded
+                          : Icons.verified_user_rounded,
+                      color: isPelanggaran
+                          ? const Color(0xFFFBBF24)
+                          : const Color(0xFF38BDF8),
                       size: 32,
                     ),
                   ),
@@ -1957,44 +1973,52 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               const Divider(color: Color(0xFF1E293B), height: 1),
               const SizedBox(height: 20),
 
-              // 3 Anonymous Summary Cards (Count only without individual jury IDs)
+              // 3 Anonymous Summary Cards (Left: Blue, Center: Invalid/Yellow, Right: Red)
               Row(
                 children: [
-                  // 1. INVALID / TIDAK SAH CARD
+                  // 1. SUDUT BIRU CARD (LEFT)
                   Expanded(
                     child: _buildAnonymousSummaryCard(
-                      label: 'INVALID / TIDAK SAH',
-                      count: countInvalid,
-                      color: const Color(0xFF64748B),
-                      borderColor: const Color(0xFF94A3B8),
-                      icon: Icons.cancel_outlined,
-                    ),
-                  ),
-
-                  const SizedBox(width: 14),
-
-                  // 2. JATUHAN SUDUT BIRU CARD
-                  Expanded(
-                    child: _buildAnonymousSummaryCard(
-                      label: 'JATUHAN BIRU',
+                      label: isPelanggaran ? 'PELANGGARAN BIRU' : 'JATUHAN BIRU',
                       count: countBiru,
                       color: const Color(0xFF0284C7),
                       borderColor: const Color(0xFF38BDF8),
-                      icon: Icons.sports_martial_arts,
+                      icon: isPelanggaran
+                          ? Icons.gavel_rounded
+                          : Icons.sports_martial_arts,
                       athleteName: _atlit1?.namaLengkap,
                     ),
                   ),
 
                   const SizedBox(width: 14),
 
-                  // 3. JATUHAN SUDUT MERAH CARD
+                  // 2. INVALID / TIDAK SAH CARD (CENTER)
                   Expanded(
                     child: _buildAnonymousSummaryCard(
-                      label: 'JATUHAN MERAH',
+                      label: isPelanggaran
+                          ? 'TIDAK ADA PELANGGARAN'
+                          : 'INVALID / TIDAK SAH',
+                      count: countInvalid,
+                      color: const Color(0xFFD97706),
+                      borderColor: const Color(0xFFF59E0B),
+                      icon: Icons.cancel_outlined,
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // 3. SUDUT MERAH CARD (RIGHT)
+                  Expanded(
+                    child: _buildAnonymousSummaryCard(
+                      label: isPelanggaran
+                          ? 'PELANGGARAN MERAH'
+                          : 'JATUHAN MERAH',
                       count: countMerah,
                       color: const Color(0xFFE11D48),
                       borderColor: const Color(0xFFFB7185),
-                      icon: Icons.sports_martial_arts,
+                      icon: isPelanggaran
+                          ? Icons.gavel_rounded
+                          : Icons.sports_martial_arts,
                       athleteName: _atlit2?.namaLengkap,
                     ),
                   ),
@@ -2051,8 +2075,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       const SizedBox(width: 14),
                       Text(
                         _verifikasiHasil == 'invalid'
-                            ? 'JATUHAN TIDAK SAH'
-                            : 'JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()}',
+                            ? (isPelanggaran
+                                ? 'TIDAK ADA PELANGGARAN'
+                                : 'JATUHAN TIDAK SAH')
+                            : (isPelanggaran
+                                ? 'PELANGGARAN SUDUT ${_verifikasiHasil!.toUpperCase()}'
+                                : 'JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()}'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,

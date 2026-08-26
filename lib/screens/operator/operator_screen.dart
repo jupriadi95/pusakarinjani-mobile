@@ -181,6 +181,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     // ── Nilai Masuk Socket Listener ──
     _nilaiSub = _socketService.onNilaiCreated.listen((n) {
       if (mounted) {
+        // Skip entries created by this Dewan screen (KP) since they are already
+        // handled via the optimistic addFromSocket in _handleKpAction.
+        // Strapi's afterCreate lifecycle broadcasts nilai:created after REST persist,
+        // which would cause a duplicate entry in the history list.
+        if (n.juriId == 'KP') return;
         ref.read(nilaiListProvider.notifier).addFromSocket(n);
       }
     });
@@ -188,6 +193,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     // ── KP Nilai Socket Listener (Batal Jatuhan / Deductions) ──
     _nilaiKpSub = _socketService.onNilaiKp.listen((data) {
       if (!mounted) return;
+      // Skip events that this Dewan screen emitted itself (juri_id == 'KP').
+      // Those are already handled by the optimistic addFromSocket in _handleKpAction.
+      final juriId = data['juri_id']?.toString() ?? data['juriId']?.toString() ?? '';
+      if (juriId == 'KP') return;
       try {
         final nilai = Nilai.fromJson(Map<String, dynamic>.from(data));
         ref.read(nilaiListProvider.notifier).addFromSocket(nilai);
@@ -715,21 +724,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     final gelanggang = ref.read(activeGelanggangProvider);
     final jadwalDocId = _selectedJadwal?.documentId ?? '';
 
-    // 1. Emit real-time Socket event (Strapi scoringEngine creates the published database record & broadcasts)
-    final socketPayload = {
-      'gelanggangId': gelanggang?.documentId ?? '',
-      'jadwalId': jadwalDocId,
-      'atletId': atlitDocId,
-      'sudut': isRed ? 'merah' : 'biru',
-      'aksi': aksi,
-      'point': point,
-      'jumlah': point,
-      'babak': _selectedJadwal?.babak ?? '1',
-      'menit_ke': _formattedTimer,
-    };
-    _socketService.emitKpAction(socketPayload);
-
-    // 2. Optimistic local state update so tablet UI responds immediately
+    // 1. Optimistic local state update so tablet UI responds immediately
+    // NOTE: We do NOT call emitKpAction here because scoringEngine on Strapi
+    // would create a duplicate DB record. Persistence is done via REST below,
+    // and emitNilaiKp is used to broadcast the confirmed record to other screens.
     final localNilai = Nilai(
       id: DateTime.now().millisecondsSinceEpoch,
       peserta: atlit,
@@ -752,6 +750,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         } else {
           _kpBinaanBiru = (_kpBinaanBiru + 1).clamp(0, 2);
         }
+      } else if (aksi == 'batal_binaan') {
+        if (isRed) {
+          _kpBinaanMerah = (_kpBinaanMerah - 1).clamp(0, 2);
+        } else {
+          _kpBinaanBiru = (_kpBinaanBiru - 1).clamp(0, 2);
+        }
       } else if (aksi == 'teguran') {
         final count = point == -2 ? 2 : 1;
         if (isRed) {
@@ -759,8 +763,22 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         } else {
           _kpTeguranBiru = count;
         }
+      } else if (aksi == 'batal_teguran') {
+        final count = point == 2 ? 1 : 0;
+        if (isRed) {
+          _kpTeguranMerah = count;
+        } else {
+          _kpTeguranBiru = count;
+        }
       } else if (aksi == 'pembinaan') {
         final count = point == -10 ? 2 : 1;
+        if (isRed) {
+          _kpPembinaanMerah = count;
+        } else {
+          _kpPembinaanBiru = count;
+        }
+      } else if (aksi == 'batal_pembinaan') {
+        final count = point == 10 ? 1 : 0;
         if (isRed) {
           _kpPembinaanMerah = count;
         } else {
@@ -784,21 +802,27 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       PusakaTheme.indigo500,
     );
 
-    // 3. For 'batal_jatuhan' (point == -3):
-    // Strapi's socket engine does not have an automatic handler for batal_jatuhan,
-    // so we explicitly persist it to Strapi REST API using the valid enum 'jatuhan' with jumlah: -3.
-    // After REST persist succeeds, we emit nilai:kp socket event so Monitor/Juri get realtime sync.
-    // (Note: Other actions like 'jatuhan', 'teguran', 'pembinaan' are already automatically
-    // created in the database and broadcasted as nilai:created by Strapi's socket engine).
-    if (aksi == 'batal_jatuhan' || point == -3) {
+    // 3. For cancellation / deduction restoration actions (batal_jatuhan, batal_teguran, batal_pembinaan)
+    // or point-bearing custom KP actions:
+    if (aksi.startsWith('batal_') || point != 0) {
       try {
+        final strapiJenis = (aksi == 'batal_jatuhan' || aksi == 'jatuhan')
+            ? 'jatuhan'
+            : (aksi == 'batal_teguran' || aksi == 'teguran')
+            ? 'teguran'
+            : (aksi == 'batal_pembinaan' || aksi == 'pembinaan')
+            ? 'pembinaan'
+            : (aksi == 'batal_binaan' || aksi == 'binaan')
+            ? 'binaan'
+            : aksi;
+
         final res = await _api.createProtect('nilais', {
           'data': {
-            'jumlah': -3,
+            'jumlah': point,
             'peserta': atlitDocId,
             'menit_ke': _formattedTimer,
             'status': 'sah',
-            'jenis': 'jatuhan', // Valid enum on Strapi schema
+            'jenis': strapiJenis, // Valid enum on Strapi schema
             'sudut': isRed ? 'merah' : 'biru',
             'juri_id': 'KP',
             'juri_count': 1,
@@ -808,33 +832,19 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         });
         if (res['data'] != null && res['data'] is Map) {
           final serverData = Map<String, dynamic>.from(res['data'] as Map);
-          final serverNilai = Nilai(
-            id: serverData['id'] as int?,
-            documentId: serverData['documentId'] as String?,
-            peserta: atlit, // Preserves the athlete reference!
-            jumlah: -3,
-            menitKe: _formattedTimer,
-            status: 'sah',
-            jenis: 'batal_jatuhan',
-            sudut: isRed ? 'merah' : 'biru',
-            juriId: 'KP',
-            juriCount: 1,
-            createdAt: DateTime.now(),
-          );
-          // Update local state of Dewan with server-confirmed record
-          ref.read(nilaiListProvider.notifier).addFromSocket(serverNilai);
-
-          // Emit socket event so Monitor and Juri screens receive this deduction in realtime
-          final gelanggang = ref.read(activeGelanggangProvider);
+          // NOTE: We do NOT call addFromSocket here again because the local state
+          // was already updated optimistically above. We only broadcast to other
+          // screens (Monitor & Juri) via emitNilaiKp.
+          final gelanggangBroadcast = ref.read(activeGelanggangProvider);
           _socketService.emitNilaiKp({
-            'gelanggangId': gelanggang?.documentId ?? '',
-            'documentId': serverNilai.documentId,
-            'id': serverNilai.id,
-            'jumlah': -3,
+            'gelanggangId': gelanggangBroadcast?.documentId ?? '',
+            'documentId': serverData['documentId'],
+            'id': serverData['id'],
+            'jumlah': point,
             'peserta': atlitDocId,
             'menit_ke': _formattedTimer,
             'status': 'sah',
-            'jenis': 'batal_jatuhan',
+            'jenis': aksi,
             'sudut': isRed ? 'merah' : 'biru',
             'juri_id': 'KP',
             'juri_count': 1,
@@ -843,7 +853,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           });
         }
       } catch (e) {
-        debugPrint('[Dewan] Error persisting batal_jatuhan to Strapi: $e');
+        debugPrint('[Dewan] Error persisting $aksi to Strapi: $e');
       }
     }
 
@@ -885,9 +895,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ── DEWAN VERIFICATION WORKFLOW (VERIFIKASI JATUHAN) ──
+  // ── DEWAN VERIFICATION WORKFLOW (JATUHAN & PELANGGARAN) ──
   // ══════════════════════════════════════════════════════════════════════════
-  void _startVerifikasiJatuhan() {
+  void _startVerifikasi(String jenis) {
     if (!_tandingStatus) {
       _showSnack(
         'Pertandingan belum dimulai! Klik MULAI terlebih dahulu.',
@@ -895,7 +905,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       );
       return;
     }
-    debugPrint('[Dewan] _startVerifikasiJatuhan triggered');
+    final isPelanggaran = jenis.toLowerCase() == 'pelanggaran';
+    debugPrint('[Dewan] _startVerifikasi ($jenis) triggered');
     final gelanggang = ref.read(activeGelanggangProvider);
     final jadwalDocId = _selectedJadwal?.documentId ?? '';
 
@@ -914,7 +925,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
     setState(() {
       _verifikasiActive = true;
-      _verifikasiJenis = 'jatuhan';
+      _verifikasiJenis = jenis;
       _verifikasiVotes['juri_1'] = null;
       _verifikasiVotes['juri_2'] = null;
       _verifikasiVotes['juri_3'] = null;
@@ -924,8 +935,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     final payload = {
       'gelanggangId': gelanggang?.documentId ?? '',
       'jadwalId': jadwalDocId,
-      'jenis': 'jatuhan',
-      'judul': 'VERIFIKASI JATUHAN',
+      'jenis': jenis,
+      'judul': isPelanggaran ? 'VERIFIKASI PELANGGARAN' : 'VERIFIKASI JATUHAN',
       'atlitBiru': {
         'documentId': bId,
         'nama':
@@ -955,6 +966,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _socketService.emitVerifikasiMulai(payload);
     _showDewanVerifikasiDialog();
   }
+
+  void _startVerifikasiJatuhan() => _startVerifikasi('jatuhan');
+  void _startVerifikasiPelanggaran() => _startVerifikasi('pelanggaran');
 
   void _evaluasiKonsensusVerifikasi() {
     if (!_verifikasiActive || _verifikasiHasil != null) return;
@@ -1031,32 +1045,41 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF0369A1,
-                                ).withValues(alpha: 0.3),
+                                color: (_verifikasiJenis == 'pelanggaran'
+                                        ? const Color(0xFFD97706)
+                                        : const Color(0xFF0369A1))
+                                    .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(
-                                Icons.verified_user_rounded,
-                                color: Color(0xFF38BDF8),
+                              child: Icon(
+                                _verifikasiJenis == 'pelanggaran'
+                                    ? Icons.gavel_rounded
+                                    : Icons.verified_user_rounded,
+                                color: _verifikasiJenis == 'pelanggaran'
+                                    ? const Color(0xFFFBBF24)
+                                    : const Color(0xFF38BDF8),
                                 size: 24,
                               ),
                             ),
                             const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text(
-                                  'VERIFIKASI JATUHAN SEDANG BERLANGSUNG',
-                                  style: TextStyle(
+                                  _verifikasiJenis == 'pelanggaran'
+                                      ? 'VERIFIKASI PELANGGARAN'
+                                      : 'VERIFIKASI JATUHAN',
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
                                 Text(
-                                  'Menunggu input verifikasi dari 3 Juri Pertandingan',
-                                  style: TextStyle(
+                                  _verifikasiJenis == 'pelanggaran'
+                                      ? 'Menunggu input verifikasi pelanggaran dari 3 Juri Pertandingan'
+                                      : 'Menunggu input verifikasi jatuhan dari 3 Juri Pertandingan',
+                                  style: const TextStyle(
                                     color: Color(0xFF94A3B8),
                                     fontSize: 12,
                                   ),
@@ -1071,20 +1094,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF0369A1,
-                            ).withValues(alpha: 0.25),
+                            color: (_verifikasiJenis == 'pelanggaran'
+                                    ? const Color(0xFFD97706)
+                                    : const Color(0xFF0369A1))
+                                .withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: const Color(
-                                0xFF38BDF8,
-                              ).withValues(alpha: 0.5),
+                              color: _verifikasiJenis == 'pelanggaran'
+                                  ? const Color(0xFFFBBF24).withValues(alpha: 0.5)
+                                  : const Color(0xFF38BDF8).withValues(alpha: 0.5),
                             ),
                           ),
                           child: Text(
                             '$votesCount / 3 JURI MERESPON',
-                            style: const TextStyle(
-                              color: Color(0xFF38BDF8),
+                            style: TextStyle(
+                              color: _verifikasiJenis == 'pelanggaran'
+                                  ? const Color(0xFFFBBF24)
+                                  : const Color(0xFF38BDF8),
                               fontSize: 10.5,
                               fontWeight: FontWeight.w900,
                             ),
@@ -1161,8 +1187,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                             const SizedBox(width: 12),
                             Text(
                               _verifikasiHasil == 'invalid'
-                                  ? 'JATUHAN TIDAK SAH'
-                                  : 'JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()}',
+                                  ? (_verifikasiJenis == 'pelanggaran'
+                                      ? 'TIDAK ADA PELANGGARAN'
+                                      : 'JATUHAN TIDAK SAH')
+                                  : (_verifikasiJenis == 'pelanggaran'
+                                      ? 'PELANGGARAN SUDUT ${_verifikasiHasil!.toUpperCase()}'
+                                      : 'JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()}'),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16.5,
@@ -1176,396 +1206,71 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                       const SizedBox(height: 18),
 
-                      // ── ACTION BUTTONS BASED ON VERIFICATION RESULT ──
-                      if (_verifikasiHasil == 'invalid') ...[
-                        const Text(
-                          'Pilih sudut jika ingin membatalkan/mengurangi poin jatuhan:',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                      // Selesai / Tutup Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            final gelanggang = ref.read(
+                              activeGelanggangProvider,
+                            );
+                            final labelVer = _verifikasiHasil == 'invalid'
+                                ? (_verifikasiJenis == 'pelanggaran'
+                                    ? 'Tidak Ada Pelanggaran'
+                                    : 'Jatuhan Tidak Sah')
+                                : (_verifikasiJenis == 'pelanggaran'
+                                    ? 'Pelanggaran Sudut ${_verifikasiHasil!.toUpperCase()}'
+                                    : 'Jatuhan Sah Sudut ${_verifikasiHasil!.toUpperCase()}');
+
+                            _socketService.emitVerifikasiSelesai({
+                              'gelanggangId': gelanggang?.documentId ?? '',
+                              'jenis': _verifikasiJenis,
+                              'hasil': _verifikasiHasil,
+                              'keterangan': labelVer,
+                              'votes': Map<String, dynamic>.from(
+                                _verifikasiVotes,
+                              ),
+                            });
+
+                            setState(() => _verifikasiActive = false);
+                            Navigator.pop(ctx);
+                          },
+                          icon: const Icon(
+                            Icons.check_circle_outline,
+                            color: Colors.white,
+                            size: 20,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            // 1. KURANGI (-3) SUDUT BIRU
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  _handleKpAction(
-                                    'batal_jatuhan',
-                                    _atlitBiru,
-                                    false,
-                                    point: -3,
-                                    label: 'Jatuhan Batal (-3)',
-                                  );
-
-                                  final gelanggang = ref.read(
-                                    activeGelanggangProvider,
-                                  );
-                                  _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId':
-                                        gelanggang?.documentId ?? '',
-                                    'jenis': _verifikasiJenis,
-                                    'hasil': _verifikasiHasil,
-                                    'keterangan':
-                                        'Jatuhan Dibatalkan (-3) Sudut BIRU oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(
-                                      _verifikasiVotes,
-                                    ),
-                                  });
-
-                                  setState(() => _verifikasiActive = false);
-                                  Navigator.pop(ctx);
-                                  _showSnack(
-                                    'Poin Jatuhan (-3) Sudut BIRU Berhasil Dikurangi!',
-                                    PusakaTheme.amber500,
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.remove_circle,
-                                  color: Color(0xFF38BDF8),
-                                  size: 18,
-                                ),
-                                label: const Text(
-                                  'KURANGI (-3) BIRU',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0C4A6E),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(
-                                      color: Color(0xFF38BDF8),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  elevation: 4,
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 12),
-
-                            // 2. KURANGI (-3) SUDUT MERAH
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  _handleKpAction(
-                                    'batal_jatuhan',
-                                    _atlitMerah,
-                                    true,
-                                    point: -3,
-                                    label: 'Jatuhan Batal (-3)',
-                                  );
-
-                                  final gelanggang = ref.read(
-                                    activeGelanggangProvider,
-                                  );
-                                  _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId':
-                                        gelanggang?.documentId ?? '',
-                                    'jenis': _verifikasiJenis,
-                                    'hasil': _verifikasiHasil,
-                                    'keterangan':
-                                        'Jatuhan Dibatalkan (-3) Sudut MERAH oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(
-                                      _verifikasiVotes,
-                                    ),
-                                  });
-
-                                  setState(() => _verifikasiActive = false);
-                                  Navigator.pop(ctx);
-                                  _showSnack(
-                                    'Poin Jatuhan (-3) Sudut MERAH Berhasil Dikurangi!',
-                                    PusakaTheme.amber500,
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.remove_circle,
-                                  color: Color(0xFFFB7185),
-                                  size: 18,
-                                ),
-                                label: const Text(
-                                  'KURANGI (-3) MERAH',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF881337),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(
-                                      color: Color(0xFFFB7185),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  elevation: 4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // 3. TUTUP (0 POIN)
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              final gelanggang = ref.read(
-                                activeGelanggangProvider,
-                              );
-                              _socketService.emitVerifikasiSelesai({
-                                'gelanggangId': gelanggang?.documentId ?? '',
-                                'jenis': _verifikasiJenis,
-                                'hasil': _verifikasiHasil,
-                                'keterangan': 'Jatuhan Tidak Sah (0 Poin)',
-                                'votes': Map<String, dynamic>.from(
-                                  _verifikasiVotes,
-                                ),
-                              });
-
-                              setState(() => _verifikasiActive = false);
-                              Navigator.pop(ctx);
-                            },
-                            icon: const Icon(
-                              Icons.close,
-                              color: Color(0xFF94A3B8),
-                              size: 16,
-                            ),
-                            label: const Text(
-                              'TUTUP (JATUHAN TIDAK SAH / 0 POIN)',
-                              style: TextStyle(
-                                color: Color(0xFFCBD5E1),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF334155)),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                          label: const Text(
+                            'SELESAI / TUTUP HASIL VERIFIKASI',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                        ),
-                      ] else ...[
-                        // ── KEPUTUSAN SAH SUDUT BIRU / MERAH ──
-                        Row(
-                          children: [
-                            // 1. TAMBAH NILAI (+3)
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  final isRed = _verifikasiHasil == 'merah';
-                                  final atlit = isRed
-                                      ? _atlitMerah
-                                      : _atlitBiru;
-                                  final labelSudut = isRed ? 'MERAH' : 'BIRU';
-
-                                  _handleKpAction(
-                                    'jatuhan',
-                                    atlit,
-                                    isRed,
-                                    point: 3,
-                                    label: 'Jatuhan (+3)',
-                                  );
-
-                                  final gelanggang = ref.read(
-                                    activeGelanggangProvider,
-                                  );
-                                  _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId':
-                                        gelanggang?.documentId ?? '',
-                                    'jenis': _verifikasiJenis,
-                                    'hasil': _verifikasiHasil,
-                                    'keterangan':
-                                        'Jatuhan SAH (+3) Sudut $labelSudut Dikonfirmasi Dewan',
-                                    'votes': Map<String, dynamic>.from(
-                                      _verifikasiVotes,
-                                    ),
-                                  });
-
-                                  setState(() => _verifikasiActive = false);
-                                  Navigator.pop(ctx);
-                                  _showSnack(
-                                    'Poin Jatuhan (+3) Sudut $labelSudut Berhasil Ditambahkan!',
-                                    PusakaTheme.emerald600,
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.add_circle,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  'TAMBAH NILAI (+3) ${_verifikasiHasil!.toUpperCase()}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _verifikasiHasil == 'biru'
-                                      ? const Color(0xFF0284C7)
-                                      : const Color(0xFFE11D48),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: _verifikasiHasil == 'biru'
-                                          ? const Color(0xFF38BDF8)
-                                          : const Color(0xFFFB7185),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  elevation: 4,
-                                ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _verifikasiHasil == 'biru'
+                                ? const Color(0xFF0284C7)
+                                : _verifikasiHasil == 'merah'
+                                ? const Color(0xFFE11D48)
+                                : const Color(0xFF334155),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: _verifikasiHasil == 'biru'
+                                    ? const Color(0xFF38BDF8)
+                                    : _verifikasiHasil == 'merah'
+                                    ? const Color(0xFFFB7185)
+                                    : const Color(0xFF94A3B8),
+                                width: 1.5,
                               ),
                             ),
-
-                            const SizedBox(width: 12),
-
-                            // 2. KURANGI NILAI (-3)
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  final isRed = _verifikasiHasil == 'merah';
-                                  final atlit = isRed
-                                      ? _atlitMerah
-                                      : _atlitBiru;
-                                  final labelSudut = isRed ? 'MERAH' : 'BIRU';
-
-                                  _handleKpAction(
-                                    'batal_jatuhan',
-                                    atlit,
-                                    isRed,
-                                    point: -3,
-                                    label: 'Jatuhan Batal (-3)',
-                                  );
-
-                                  final gelanggang = ref.read(
-                                    activeGelanggangProvider,
-                                  );
-                                  _socketService.emitVerifikasiSelesai({
-                                    'gelanggangId':
-                                        gelanggang?.documentId ?? '',
-                                    'jenis': _verifikasiJenis,
-                                    'hasil': _verifikasiHasil,
-                                    'keterangan':
-                                        'Jatuhan Dibatalkan (-3) Sudut $labelSudut oleh Dewan',
-                                    'votes': Map<String, dynamic>.from(
-                                      _verifikasiVotes,
-                                    ),
-                                  });
-
-                                  setState(() => _verifikasiActive = false);
-                                  Navigator.pop(ctx);
-                                  _showSnack(
-                                    'Poin Jatuhan (-3) Sudut $labelSudut Berhasil Dikurangi!',
-                                    PusakaTheme.amber500,
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.remove_circle,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  'KURANGI NILAI (-3) ${_verifikasiHasil!.toUpperCase()}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF78350F),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(
-                                      color: Color(0xFFF59E0B),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  elevation: 4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // 3. TUTUP TANPA PERUBAHAN POIN
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              final gelanggang = ref.read(
-                                activeGelanggangProvider,
-                              );
-                              _socketService.emitVerifikasiSelesai({
-                                'gelanggangId': gelanggang?.documentId ?? '',
-                                'jenis': _verifikasiJenis,
-                                'hasil': _verifikasiHasil,
-                                'keterangan':
-                                    'Verifikasi Ditutup Tanpa Perubahan Poin',
-                                'votes': Map<String, dynamic>.from(
-                                  _verifikasiVotes,
-                                ),
-                              });
-
-                              setState(() => _verifikasiActive = false);
-                              Navigator.pop(ctx);
-                            },
-                            icon: const Icon(
-                              Icons.close,
-                              color: Color(0xFF94A3B8),
-                              size: 16,
-                            ),
-                            label: const Text(
-                              'TUTUP TANPA PERUBAHAN POIN',
-                              style: TextStyle(
-                                color: Color(0xFFCBD5E1),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF334155)),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
+                            elevation: 4,
                           ),
                         ),
-                      ],
+                      ),
                     ] else ...[
                       Container(
                         width: double.infinity,
@@ -1649,24 +1354,25 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     Color textCol;
     String statusLabel;
     IconData statusIcon;
+    final isPelanggaran = _verifikasiJenis.toLowerCase() == 'pelanggaran';
 
     if (vote == 'biru') {
       cardBg = const Color(0xFF0369A1).withValues(alpha: 0.35);
       borderCol = const Color(0xFF38BDF8);
       textCol = const Color(0xFF38BDF8);
-      statusLabel = 'JATUHAN BIRU';
-      statusIcon = Icons.sports_martial_arts;
+      statusLabel = isPelanggaran ? 'PELANGGARAN BIRU' : 'JATUHAN BIRU';
+      statusIcon = isPelanggaran ? Icons.gavel_rounded : Icons.sports_martial_arts;
     } else if (vote == 'merah') {
       cardBg = const Color(0xFF9F1239).withValues(alpha: 0.35);
       borderCol = const Color(0xFFFB7185);
       textCol = const Color(0xFFFB7185);
-      statusLabel = 'JATUHAN MERAH';
-      statusIcon = Icons.sports_martial_arts;
+      statusLabel = isPelanggaran ? 'PELANGGARAN MERAH' : 'JATUHAN MERAH';
+      statusIcon = isPelanggaran ? Icons.gavel_rounded : Icons.sports_martial_arts;
     } else if (vote == 'invalid') {
-      cardBg = const Color(0xFF334155).withValues(alpha: 0.35);
-      borderCol = const Color(0xFF94A3B8);
-      textCol = const Color(0xFFCBD5E1);
-      statusLabel = 'INVALID (TIDAK SAH)';
+      cardBg = const Color(0xFFD97706).withValues(alpha: 0.25);
+      borderCol = const Color(0xFFF59E0B);
+      textCol = const Color(0xFFFBBF24);
+      statusLabel = isPelanggaran ? 'TIDAK ADA PELANGGARAN' : 'INVALID (TIDAK SAH)';
       statusIcon = Icons.cancel_outlined;
     } else {
       cardBg = const Color(0xFF0F172A);
@@ -1880,6 +1586,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                 _selectedJadwal?.documentId == j.documentId ||
                                 (_selectedJadwal?.id != null &&
                                     _selectedJadwal?.id == j.id);
+                            final isSelesai = j.status == 'selesai' ||
+                                j.statusTanding == 'selesai' ||
+                                j.pemenang != null;
 
                             return InkWell(
                               onTap: () {
@@ -1901,14 +1610,40 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                       ? const Color(
                                           0xFF1E1B4B,
                                         ).withValues(alpha: 0.85)
-                                      : const Color(0xFF0F172A),
+                                      : (isSelesai
+                                          ? const Color(0xFF064E3B)
+                                              .withValues(alpha: 0.25)
+                                          : const Color(0xFF0F172A)),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isSelected
-                                        ? const Color(0xFF6366F1)
-                                        : const Color(0xFF1E293B),
-                                    width: isSelected ? 1.8 : 1.0,
+                                    color: isSelesai
+                                        ? const Color(0xFF10B981)
+                                        : (isSelected
+                                            ? const Color(0xFF6366F1)
+                                            : const Color(0xFF1E293B)),
+                                    width: isSelesai
+                                        ? 2.0
+                                        : (isSelected ? 1.8 : 1.0),
                                   ),
+                                  boxShadow: isSelesai
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF10B981)
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ]
+                                      : (isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(0xFF6366F1)
+                                                    .withValues(alpha: 0.3),
+                                                blurRadius: 8,
+                                              ),
+                                            ]
+                                          : null),
                                 ),
                                 child: Row(
                                   children: [
@@ -1921,19 +1656,42 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                       decoration: BoxDecoration(
                                         color: isSelected
                                             ? const Color(0xFF4F46E5)
-                                            : const Color(0xFF1E293B),
+                                            : (isSelesai
+                                                ? const Color(0xFF065F46)
+                                                : const Color(0xFF1E293B)),
                                         borderRadius: BorderRadius.circular(8),
+                                        border: isSelesai
+                                            ? Border.all(
+                                                color: const Color(0xFF34D399),
+                                                width: 1.2,
+                                              )
+                                            : null,
                                       ),
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Text(
-                                            'PARTAI',
-                                            style: TextStyle(
-                                              color: Color(0xFFCBD5E1),
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (isSelesai) ...[
+                                                const Icon(
+                                                  Icons.check_circle_rounded,
+                                                  color: Color(0xFF34D399),
+                                                  size: 11,
+                                                ),
+                                                const SizedBox(width: 3),
+                                              ],
+                                              Text(
+                                                'PARTAI',
+                                                style: TextStyle(
+                                                  color: isSelesai
+                                                      ? const Color(0xFFA7F3D0)
+                                                      : const Color(0xFFCBD5E1),
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           Text(
                                             '#${j.nomorPartai ?? '-'}',
@@ -2098,7 +1856,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                                     const SizedBox(width: 14),
 
-                                    // Class & Selection Status
+                                    // Class & Selection / Selesai Status
                                     Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.end,
@@ -2110,22 +1868,68 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                             vertical: 3.5,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF1E1B4B),
+                                            color: isSelesai
+                                                ? const Color(0xFF064E3B)
+                                                : const Color(0xFF1E1B4B),
                                             borderRadius: BorderRadius.circular(
                                               6,
                                             ),
+                                            border: isSelesai
+                                                ? Border.all(
+                                                    color:
+                                                        const Color(0xFF059669),
+                                                    width: 1,
+                                                  )
+                                                : null,
                                           ),
                                           child: Text(
                                             j.kelas?.namaKelas ?? 'Kelas',
-                                            style: const TextStyle(
-                                              color: Color(0xFFA5B4FC),
+                                            style: TextStyle(
+                                              color: isSelesai
+                                                  ? const Color(0xFFA7F3D0)
+                                                  : const Color(0xFFA5B4FC),
                                               fontSize: 10.5,
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(height: 4),
-                                        if (isSelected)
+                                        if (isSelesai)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF065F46),
+                                              borderRadius:
+                                                  BorderRadius.circular(5),
+                                              border: Border.all(
+                                                color: const Color(0xFF34D399),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.check_circle_rounded,
+                                                  color: Color(0xFF34D399),
+                                                  size: 13,
+                                                ),
+                                                SizedBox(width: 3),
+                                                Text(
+                                                  'SELESAI',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF34D399),
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else if (isSelected)
                                           const Row(
                                             children: [
                                               Icon(
@@ -3111,15 +2915,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 1 (-1)',
                         Icons.looks_one_outlined,
                         const Color(0xFF1E293B),
-                        teguran >= 1
-                            ? null
-                            : () => _handleKpAction(
+                        teguran == 0
+                            ? () => _handleKpAction(
                                 'teguran',
                                 _atlitBiru,
                                 false,
                                 point: -1,
                                 label: 'Teguran 1 (-1)',
-                              ),
+                              )
+                            : (teguran == 1 && pembinaan == 0)
+                            ? () => _handleKpAction(
+                                'batal_teguran',
+                                _atlitBiru,
+                                false,
+                                point: 1,
+                                label: 'Pelanggaran Dibatalkan (+1)',
+                              )
+                            : null,
                         isActive: teguran >= 1,
                         activeColor: const Color(0xFFEA580C),
                         badge: '-1',
@@ -3129,15 +2941,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        teguran >= 2
-                            ? null
-                            : () => _handleKpAction(
+                        (teguran == 1 && pembinaan == 0)
+                            ? () => _handleKpAction(
                                 'teguran',
                                 _atlitBiru,
                                 false,
                                 point: -2,
                                 label: 'Teguran 2 (-2)',
-                              ),
+                              )
+                            : (teguran == 2 && pembinaan == 0)
+                            ? () => _handleKpAction(
+                                'batal_teguran',
+                                _atlitBiru,
+                                false,
+                                point: 2,
+                                label: 'Pelanggaran Dibatalkan (+2)',
+                              )
+                            : null,
                         isActive: teguran >= 2,
                         activeColor: const Color(0xFFEA580C),
                         badge: '-2',
@@ -3163,15 +2983,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 1 (-5)',
                         Icons.gavel,
                         const Color(0xFF1E293B),
-                        pembinaan >= 1
-                            ? null
-                            : () => _handleKpAction(
+                        pembinaan == 0
+                            ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitBiru,
                                 false,
                                 point: -5,
                                 label: 'Peringatan 1 (-5)',
-                              ),
+                              )
+                            : pembinaan == 1
+                            ? () => _handleKpAction(
+                                'batal_pembinaan',
+                                _atlitBiru,
+                                false,
+                                point: 5,
+                                label: 'Pelanggaran Dibatalkan (+5)',
+                              )
+                            : null,
                         isActive: pembinaan >= 1,
                         activeColor: const Color(0xFFE11D48),
                         badge: '-5',
@@ -3181,15 +3009,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        pembinaan >= 2
-                            ? null
-                            : () => _handleKpAction(
+                        pembinaan == 1
+                            ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitBiru,
                                 false,
                                 point: -10,
                                 label: 'Peringatan 2 (-10)',
-                              ),
+                              )
+                            : pembinaan == 2
+                            ? () => _handleKpAction(
+                                'batal_pembinaan',
+                                _atlitBiru,
+                                false,
+                                point: 10,
+                                label: 'Pelanggaran Dibatalkan (+10)',
+                              )
+                            : null,
                         isActive: pembinaan >= 2,
                         activeColor: const Color(0xFFE11D48),
                         badge: '-10',
@@ -3464,15 +3300,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        teguran >= 2
-                            ? null
-                            : () => _handleKpAction(
+                        (teguran == 1 && pembinaan == 0)
+                            ? () => _handleKpAction(
                                 'teguran',
                                 _atlitMerah,
                                 true,
                                 point: -2,
                                 label: 'Teguran 2 (-2)',
-                              ),
+                              )
+                            : (teguran == 2 && pembinaan == 0)
+                            ? () => _handleKpAction(
+                                'batal_teguran',
+                                _atlitMerah,
+                                true,
+                                point: 2,
+                                label: 'Pelanggaran Dibatalkan (+2)',
+                              )
+                            : null,
                         isActive: teguran >= 2,
                         activeColor: const Color(0xFFEA580C),
                         badge: '-2',
@@ -3482,15 +3326,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 1 (-1)',
                         Icons.looks_one_outlined,
                         const Color(0xFF1E293B),
-                        teguran >= 1
-                            ? null
-                            : () => _handleKpAction(
+                        teguran == 0
+                            ? () => _handleKpAction(
                                 'teguran',
                                 _atlitMerah,
                                 true,
                                 point: -1,
                                 label: 'Teguran 1 (-1)',
-                              ),
+                              )
+                            : (teguran == 1 && pembinaan == 0)
+                            ? () => _handleKpAction(
+                                'batal_teguran',
+                                _atlitMerah,
+                                true,
+                                point: 1,
+                                label: 'Pelanggaran Dibatalkan (+1)',
+                              )
+                            : null,
                         isActive: teguran >= 1,
                         activeColor: const Color(0xFFEA580C),
                         badge: '-1',
@@ -3516,15 +3368,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        pembinaan >= 2
-                            ? null
-                            : () => _handleKpAction(
+                        pembinaan == 1
+                            ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitMerah,
                                 true,
                                 point: -10,
                                 label: 'Peringatan 2 (-10)',
-                              ),
+                              )
+                            : pembinaan == 2
+                            ? () => _handleKpAction(
+                                'batal_pembinaan',
+                                _atlitMerah,
+                                true,
+                                point: 10,
+                                label: 'Pelanggaran Dibatalkan (+10)',
+                              )
+                            : null,
                         isActive: pembinaan >= 2,
                         activeColor: const Color(0xFFE11D48),
                         badge: '-10',
@@ -3534,15 +3394,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 1 (-5)',
                         Icons.gavel,
                         const Color(0xFF1E293B),
-                        pembinaan >= 1
-                            ? null
-                            : () => _handleKpAction(
+                        pembinaan == 0
+                            ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitMerah,
                                 true,
                                 point: -5,
                                 label: 'Peringatan 1 (-5)',
-                              ),
+                              )
+                            : pembinaan == 1
+                            ? () => _handleKpAction(
+                                'batal_pembinaan',
+                                _atlitMerah,
+                                true,
+                                point: 5,
+                                label: 'Pelanggaran Dibatalkan (+5)',
+                              )
+                            : null,
                         isActive: pembinaan >= 1,
                         activeColor: const Color(0xFFE11D48),
                         badge: '-5',
@@ -3971,14 +3839,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   opacity: _tandingStatus ? 1.0 : 0.38,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: _tandingStatus
-                        ? () {
-                            _showSnack(
-                              'Verifikasi Pelanggaran dipilih',
-                              const Color(0xFFD97706),
-                            );
-                          }
-                        : null,
+                    onTap: _tandingStatus ? _startVerifikasiPelanggaran : null,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -4120,7 +3981,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     Color? badgeColor,
   }) {
     final isEnabled = _tandingStatus;
-    final canTap = isEnabled && !isActive && onTap != null;
+    final canTap = isEnabled && onTap != null;
 
     final effectiveBgColor = isActive
         ? activeColor

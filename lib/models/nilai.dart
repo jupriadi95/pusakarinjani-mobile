@@ -51,10 +51,20 @@ class Nilai {
           return 'Batal Jatuhan (-3)';
         case 'binaan':
           return 'Binaan (0)';
+        case 'batal_binaan':
+          return 'Binaan Dibatalkan (0)';
         case 'teguran':
-          return jumlah == -2 ? 'Teguran 2 (-2)' : 'Teguran 1 (-1)';
+          return (jumlah != null && jumlah! > 0)
+              ? 'Pelanggaran Dibatalkan (+$jumlah)'
+              : (jumlah == -2 ? 'Teguran 2 (-2)' : 'Teguran 1 (-1)');
+        case 'batal_teguran':
+          return 'Pelanggaran Dibatalkan (+${jumlah ?? 1})';
         case 'pembinaan':
-          return jumlah == -10 ? 'Peringatan 2 (-10)' : 'Peringatan 1 (-5)';
+          return (jumlah != null && jumlah! > 0)
+              ? 'Pelanggaran Dibatalkan (+$jumlah)'
+              : (jumlah == -10 ? 'Peringatan 2 (-10)' : 'Peringatan 1 (-5)');
+        case 'batal_pembinaan':
+          return 'Pelanggaran Dibatalkan (+${jumlah ?? 5})';
         case 'diskualifikasi':
           return 'Diskualifikasi';
         case 'reset_babak':

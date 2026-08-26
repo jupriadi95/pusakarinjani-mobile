@@ -355,6 +355,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     final atlitMerahName =
         data['atlitMerah']?['nama'] ?? _atlit2?.namaLengkap ?? 'Sudut Merah';
     final jenisTitle = (data['jenis'] ?? 'jatuhan').toString().toUpperCase();
+    final isPelanggaran = (data['jenis'] ?? '').toString().toLowerCase() == 'pelanggaran';
 
     showDialog(
       context: context,
@@ -368,7 +369,12 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               backgroundColor: const Color(0xFF090D16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
-                side: const BorderSide(color: Color(0xFF0284C7), width: 2.5),
+                side: BorderSide(
+                  color: isPelanggaran
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF0284C7),
+                  width: 2.5,
+                ),
               ),
               child: Container(
                 width: 780,
@@ -385,14 +391,19 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF0284C7,
-                                ).withValues(alpha: 0.3),
+                                color: (isPelanggaran
+                                        ? const Color(0xFFD97706)
+                                        : const Color(0xFF0284C7))
+                                    .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(
-                                Icons.verified_user_rounded,
-                                color: Color(0xFF38BDF8),
+                              child: Icon(
+                                isPelanggaran
+                                    ? Icons.gavel_rounded
+                                    : Icons.verified_user_rounded,
+                                color: isPelanggaran
+                                    ? const Color(0xFFFBBF24)
+                                    : const Color(0xFF38BDF8),
                                 size: 28,
                               ),
                             ),
@@ -409,9 +420,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                                     letterSpacing: 0.5,
                                   ),
                                 ),
-                                const Text(
-                                  'Dewan Pertandingan meminta keputusan verifikasi dari para Juri',
-                                  style: TextStyle(
+                                Text(
+                                  isPelanggaran
+                                      ? 'Dewan Pertandingan meminta verifikasi pelanggaran dari para Juri'
+                                      : 'Dewan Pertandingan meminta keputusan verifikasi dari para Juri',
+                                  style: const TextStyle(
                                     color: Color(0xFF94A3B8),
                                     fontSize: 12,
                                   ),
@@ -469,8 +482,12 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                             const SizedBox(width: 12),
                             Text(
                               _verifikasiFinalVerdict == 'invalid'
-                                  ? 'KEPUTUSAN KONSENSUS: JATUHAN INVALID (TIDAK SAH)'
-                                  : 'KEPUTUSAN KONSENSUS: JATUHAN SAH SUDUT ${_verifikasiFinalVerdict!.toUpperCase()} (+3)',
+                                  ? (isPelanggaran
+                                      ? 'KEPUTUSAN KONSENSUS: TIDAK ADA PELANGGARAN'
+                                      : 'KEPUTUSAN KONSENSUS: JATUHAN INVALID (TIDAK SAH)')
+                                  : (isPelanggaran
+                                      ? 'KEPUTUSAN KONSENSUS: PELANGGARAN SUDUT ${_verifikasiFinalVerdict!.toUpperCase()}'
+                                      : 'KEPUTUSAN KONSENSUS: JATUHAN SAH SUDUT ${_verifikasiFinalVerdict!.toUpperCase()} (+3)'),
                               style: TextStyle(
                                 color: _verifikasiFinalVerdict == 'biru'
                                     ? const Color(0xFF38BDF8)
@@ -490,12 +507,16 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     // 3 Large Action Buttons (Blue Left, Yellow/Invalid Center, Red Right)
                     Row(
                       children: [
-                        // 1. BLUE BUTTON: JATUHAN SUDUT BIRU (+3) (LEFT)
+                        // 1. BLUE BUTTON (LEFT)
                         Expanded(
                           child: _buildVerifikasiActionButton(
-                            label: 'JATUHAN BIRU (+3)',
+                            label: isPelanggaran
+                                ? 'PELANGGARAN BIRU'
+                                : 'JATUHAN BIRU (+3)',
                             sublabel: atlitBiruName,
-                            icon: Icons.sports_martial_arts,
+                            icon: isPelanggaran
+                                ? Icons.gavel_rounded
+                                : Icons.sports_martial_arts,
                             baseColor: const Color(0xFF0284C7),
                             gradientColors: [
                               const Color(0xFF0284C7),
@@ -513,11 +534,15 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
                         const SizedBox(width: 12),
 
-                        // 2. YELLOW / AMBER BUTTON: INVALID / TIDAK SAH (CENTER)
+                        // 2. YELLOW / AMBER BUTTON (CENTER)
                         Expanded(
                           child: _buildVerifikasiActionButton(
-                            label: 'INVALID / TIDAK SAH',
-                            sublabel: 'Tidak ada poin jatuhan',
+                            label: isPelanggaran
+                                ? 'TIDAK ADA PELANGGARAN'
+                                : 'INVALID / TIDAK SAH',
+                            sublabel: isPelanggaran
+                                ? 'Bukan pelanggaran'
+                                : 'Tidak ada poin jatuhan',
                             icon: Icons.cancel_outlined,
                             baseColor: const Color(0xFFD97706),
                             gradientColors: [
@@ -536,12 +561,16 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
                         const SizedBox(width: 12),
 
-                        // 3. RED BUTTON: JATUHAN SUDUT MERAH (+3) (RIGHT)
+                        // 3. RED BUTTON (RIGHT)
                         Expanded(
                           child: _buildVerifikasiActionButton(
-                            label: 'JATUHAN MERAH (+3)',
+                            label: isPelanggaran
+                                ? 'PELANGGARAN MERAH'
+                                : 'JATUHAN MERAH (+3)',
                             sublabel: atlitMerahName,
-                            icon: Icons.sports_martial_arts,
+                            icon: isPelanggaran
+                                ? Icons.gavel_rounded
+                                : Icons.sports_martial_arts,
                             baseColor: const Color(0xFFE11D48),
                             gradientColors: [
                               const Color(0xFFE11D48),
