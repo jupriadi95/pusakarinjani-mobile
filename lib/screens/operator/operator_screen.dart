@@ -291,7 +291,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _matchTimer?.cancel();
     _matchTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() => _timerSeconds++);
+        if (_timerSeconds > 0) {
+          setState(() => _timerSeconds--);
+        } else {
+          _isTimerRunning = false;
+          _matchTimer?.cancel();
+        }
       } else {
         _isTimerRunning = false;
         _matchTimer?.cancel();
@@ -317,21 +322,22 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _matchTimer?.cancel();
     setState(() {
       _isTimerRunning = false;
-      _timerSeconds = 0;
+      _timerSeconds = 120;
       _kpBinaanBiru = 0;
       _kpTeguranBiru = 0;
       _kpBinaanMerah = 0;
       _kpTeguranMerah = 0;
     });
 
-    // 2. Emit timer:control reset event so all devices sync timer to 00:00
+    // 2. Emit timer:control reset event so all devices sync timer to 02:00
     _socketService.emitTimerControl({
       'action': 'reset',
-      'seconds': 0,
+      'seconds': 120,
       'gelanggangId': gelanggangId,
       'status': _tandingStatus ? 'berlangsung' : 'standby',
       'atlit1Id': atlitBiruDocId,
       'atlit2Id': atlitMerahDocId,
+      'babak': _selectedJadwal?.babak ?? _activeBabak,
     });
 
     // 3. Emit kp:action reset_babak for both Biru and Merah
@@ -572,13 +578,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     if (ok) {
       setState(() {
         _tandingStatus = true;
-        _timerSeconds = 0;
+        if (_timerSeconds <= 0) {
+          _timerSeconds = 120;
+        }
       });
       _startTimer();
       _socketService.emitTimerControl({
         'action': 'start',
-        'seconds': 0,
+        'seconds': _timerSeconds,
         'gelanggangId': ref.read(activeGelanggangProvider)?.documentId,
+        'babak': _activeBabak,
       });
       _showSnack(
         'Pertandingan Dimulai! Partai #${_selectedJadwal?.nomorPartai ?? '-'}',
@@ -1051,9 +1060,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
       final gelanggang = ref.read(activeGelanggangProvider);
 
-      // Emit completed verification event to Monitoring & Juri screens so they display verdict immediately
+      // Emit completed verification event to Monitoring & Juri screens so they display verdict immediately (tanpa menutup popup)
       _socketService.emitVerifikasiSelesai({
         'gelanggangId': gelanggang?.documentId ?? '',
+        'action': 'hasil',
         'jenis': _verifikasiJenis,
         'hasil': keputusan,
         'keterangan': keputusan == 'invalid'
@@ -1062,7 +1072,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'votes': Map<String, dynamic>.from(_verifikasiVotes),
       });
 
-      // Dewan popup stays open so Dewan can click Tambah Nilai (+3) or Kurangi Nilai (-3)
+      // Dewan popup stays open so Dewan can review and click Selesai/Tutup
     }
   }
 
@@ -1280,6 +1290,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                             _socketService.emitVerifikasiSelesai({
                               'gelanggangId': gelanggang?.documentId ?? '',
+                              'action': 'tutup',
                               'jenis': _verifikasiJenis,
                               'hasil': _verifikasiHasil,
                               'keterangan': labelVer,
@@ -1375,6 +1386,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                         .read(activeGelanggangProvider)
                                         ?.documentId ??
                                     '',
+                                'action': 'tutup',
                                 'hasil': 'dibatalkan',
                                 'keterangan':
                                     'Verifikasi dibatalkan oleh Dewan',

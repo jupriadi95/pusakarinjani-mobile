@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Pusaka Web (LAN / IP Address)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "web-server",
+        "--web-hostname",
+        "0.0.0.0",
+        "--web-port",
+        "8080"
+      ]
+    },
+    {
+      "name": "Pusaka Web (Chrome + LAN)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "chrome",
+        "--web-hostname",
+        "0.0.0.0",
+        "--web-port",
+        "8080"
+      ]
+    }
+  ]
+}

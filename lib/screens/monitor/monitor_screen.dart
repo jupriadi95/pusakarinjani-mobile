@@ -389,22 +389,22 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         setState(() {
           _verifikasiVotes[juriId] = pilihan;
 
-          // Check live consensus
+          // Hanya tentukan hasil akhir jika KETIGA juri (3 dari 3) sudah selesai memberikan voting
           final votes = _verifikasiVotes.values
               .where((v) => v != null)
               .toList();
-          final countBiru = votes.where((v) => v == 'biru').length;
-          final countMerah = votes.where((v) => v == 'merah').length;
-          final countInvalid = votes.where((v) => v == 'invalid').length;
 
-          if (countBiru >= 2) {
-            _verifikasiHasil = 'biru';
-          } else if (countMerah >= 2) {
-            _verifikasiHasil = 'merah';
-          } else if (countInvalid >= 2) {
-            _verifikasiHasil = 'invalid';
-          } else if (votes.length == 3) {
-            _verifikasiHasil = 'invalid';
+          if (votes.length == 3) {
+            final countBiru = votes.where((v) => v == 'biru').length;
+            final countMerah = votes.where((v) => v == 'merah').length;
+
+            if (countBiru >= 2) {
+              _verifikasiHasil = 'biru';
+            } else if (countMerah >= 2) {
+              _verifikasiHasil = 'merah';
+            } else {
+              _verifikasiHasil = 'invalid';
+            }
           }
         });
       }
@@ -412,20 +412,26 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
     _verifikasiSelesaiSub = _socketService.onVerifikasiSelesai.listen((data) {
       if (!mounted) return;
+      final action = data['action']?.toString();
       final hasil = data['hasil']?.toString() ?? '';
 
-      setState(() {
-        _verifikasiHasil = hasil;
-      });
-
-      _fetchNilai();
-
-      _verifikasiDismissTimer?.cancel();
-      _verifikasiDismissTimer = Timer(const Duration(milliseconds: 3500), () {
-        if (mounted) {
-          setState(() => _verifikasiActive = false);
+      if (action == 'tutup' || action == 'close' || hasil == 'dibatalkan') {
+        // Popup hanya ditutup ketika popup yang ada di dewan pertandingan diselesaikan
+        _verifikasiDismissTimer?.cancel();
+        setState(() {
+          _verifikasiActive = false;
+          _verifikasiHasil = null;
+        });
+        _fetchNilai();
+      } else {
+        // Update hasil akhir agar muncul di monitor
+        if (hasil.isNotEmpty) {
+          setState(() {
+            _verifikasiHasil = hasil;
+          });
         }
-      });
+        _fetchNilai();
+      }
     });
 
     // ── Synchronized Timer Control Listener (Mulai, Jeda/Pause, Lanjut/Resume, Stop) ──
@@ -507,7 +513,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() => _timerSeconds++);
+        if (_timerSeconds > 0) {
+          setState(() => _timerSeconds--);
+        } else {
+          _isTimerRunning = false;
+          _countdownTimer?.cancel();
+        }
       } else {
         _isTimerRunning = false;
         _countdownTimer?.cancel();
@@ -2111,246 +2122,225 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   // ── 4. DEWAN VERIFICATION ANONYMOUS REAL-TIME BROADCAST OVERLAY ──
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildVerifikasiOverlay() {
-    final votes = _verifikasiVotes.values.toList();
-    final countBiru = votes.where((v) => v == 'biru').length;
-    final countMerah = votes.where((v) => v == 'merah').length;
-    final countInvalid = votes.where((v) => v == 'invalid').length;
-    final totalVoted = votes.where((v) => v != null).length;
     final isPelanggaran = _verifikasiJenis.toLowerCase() == 'pelanggaran';
     final jenisTitle = _verifikasiJenis.toUpperCase();
+    final isFinalResult = _verifikasiHasil != null;
 
     return Container(
-      color: Colors.black.withValues(alpha: 0.90),
+      color: Colors.black.withValues(alpha: 0.92),
       child: Center(
         child: Container(
           width: 820,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
             color: const Color(0xFF090D16),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: isPelanggaran
-                  ? const Color(0xFFD97706)
-                  : const Color(0xFF0284C7),
+              color: isFinalResult
+                  ? (_verifikasiHasil == 'biru'
+                      ? const Color(0xFF0284C7)
+                      : _verifikasiHasil == 'merah'
+                          ? const Color(0xFFE11D48)
+                          : const Color(0xFFD97706))
+                  : (isPelanggaran
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF0284C7)),
               width: 3.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: (isPelanggaran
-                        ? const Color(0xFFD97706)
-                        : const Color(0xFF0284C7))
-                    .withValues(alpha: 0.5),
-                blurRadius: 36,
-                spreadRadius: 4,
+                color: isFinalResult
+                    ? (_verifikasiHasil == 'biru'
+                        ? const Color(0xFF0284C7)
+                        : _verifikasiHasil == 'merah'
+                            ? const Color(0xFFE11D48)
+                            : const Color(0xFFD97706))
+                        .withValues(alpha: 0.55)
+                    : (isPelanggaran
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF0284C7))
+                        .withValues(alpha: 0.4),
+                blurRadius: 40,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Overlay Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: (isPelanggaran
-                              ? const Color(0xFFD97706)
-                              : const Color(0xFF0284C7))
-                          .withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(12),
+              // ── 1. LOADING STATE (Sebelum 3 Juri Selesai Voting) ──
+              if (!isFinalResult) ...[
+                const SizedBox(height: 12),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      height: 90,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isPelanggaran
+                              ? const Color(0xFFF59E0B)
+                              : const Color(0xFF38BDF8),
+                        ),
+                      ),
                     ),
-                    child: Icon(
+                    Icon(
                       isPelanggaran
                           ? Icons.gavel_rounded
-                          : Icons.verified_user_rounded,
+                          : Icons.sports_martial_arts_rounded,
                       color: isPelanggaran
                           ? const Color(0xFFFBBF24)
                           : const Color(0xFF38BDF8),
-                      size: 32,
+                      size: 40,
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'VERIFIKASI $jenisTitle SEDANG BERLANGSUNG',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      Text(
-                        'Konsensus $totalVoted / 3 Juri Pertandingan Memberikan Keputusan',
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-              const Divider(color: Color(0xFF1E293B), height: 1),
-              const SizedBox(height: 20),
-
-              // 3 Anonymous Summary Cards (Left: Blue, Center: Invalid/Yellow, Right: Red)
-              Row(
-                children: [
-                  // 1. SUDUT BIRU CARD (LEFT)
-                  Expanded(
-                    child: _buildAnonymousSummaryCard(
-                      label: isPelanggaran ? 'PELANGGARAN BIRU' : 'JATUHAN BIRU',
-                      count: countBiru,
-                      color: const Color(0xFF0284C7),
-                      borderColor: const Color(0xFF38BDF8),
-                      icon: isPelanggaran
-                          ? Icons.gavel_rounded
-                          : Icons.sports_martial_arts,
-                      athleteName: _atlit1?.namaLengkap,
-                    ),
-                  ),
-
-                  const SizedBox(width: 14),
-
-                  // 2. INVALID / TIDAK SAH CARD (CENTER)
-                  Expanded(
-                    child: _buildAnonymousSummaryCard(
-                      label: isPelanggaran
-                          ? 'TIDAK ADA PELANGGARAN'
-                          : 'INVALID / TIDAK SAH',
-                      count: countInvalid,
-                      color: const Color(0xFFD97706),
-                      borderColor: const Color(0xFFF59E0B),
-                      icon: Icons.cancel_outlined,
-                    ),
-                  ),
-
-                  const SizedBox(width: 14),
-
-                  // 3. SUDUT MERAH CARD (RIGHT)
-                  Expanded(
-                    child: _buildAnonymousSummaryCard(
-                      label: isPelanggaran
-                          ? 'PELANGGARAN MERAH'
-                          : 'JATUHAN MERAH',
-                      count: countMerah,
-                      color: const Color(0xFFE11D48),
-                      borderColor: const Color(0xFFFB7185),
-                      icon: isPelanggaran
-                          ? Icons.gavel_rounded
-                          : Icons.sports_martial_arts,
-                      athleteName: _atlit2?.namaLengkap,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 22),
-
-              // Final Verdict Banner or Waiting Spinner
-              if (_verifikasiHasil != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 18,
-                    horizontal: 22,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _verifikasiHasil == 'biru'
-                        ? const Color(0xFF0284C7).withValues(alpha: 0.6)
-                        : _verifikasiHasil == 'merah'
-                        ? const Color(0xFFE11D48).withValues(alpha: 0.6)
-                        : const Color(0xFF1E293B).withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _verifikasiHasil == 'biru'
-                          ? const Color(0xFF38BDF8)
-                          : _verifikasiHasil == 'merah'
-                          ? const Color(0xFFFB7185)
-                          : const Color(0xFF94A3B8),
-                      width: 3.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _verifikasiHasil == 'biru'
-                            ? const Color(0xFF0284C7).withValues(alpha: 0.55)
-                            : _verifikasiHasil == 'merah'
-                            ? const Color(0xFFE11D48).withValues(alpha: 0.55)
-                            : Colors.black.withValues(alpha: 0.4),
-                        blurRadius: 22,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _verifikasiHasil == 'invalid'
-                            ? Icons.cancel_outlined
-                            : Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                      const SizedBox(width: 14),
-                      Text(
-                        _verifikasiHasil == 'invalid'
-                            ? (isPelanggaran
-                                ? 'TIDAK ADA PELANGGARAN'
-                                : 'JATUHAN TIDAK SAH')
-                            : (isPelanggaran
-                                ? 'PELANGGARAN SUDUT ${_verifikasiHasil!.toUpperCase()}'
-                                : 'JATUHAN SAH SUDUT ${_verifikasiHasil!.toUpperCase()}'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF1E293B)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Color(0xFF38BDF8),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        'Menunggu Input Keputusan 2 dari 3 Juri...',
-                        style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'VERIFIKASI $jenisTitle SEDANG BERLANGSUNG',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
                   ),
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Mohon Menunggu, Ketiga Juri Sedang Mengambil Keputusan...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Anonymous Juri Status Indicator Chips
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: ['juri_1', 'juri_2', 'juri_3'].asMap().entries.map((e) {
+                    final index = e.key + 1;
+                    final juriKey = e.value;
+                    final hasVoted = _verifikasiVotes[juriKey] != null;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: hasVoted
+                            ? const Color(0xFF059669).withValues(alpha: 0.25)
+                            : const Color(0xFF1E293B).withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: hasVoted
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF334155),
+                          width: hasVoted ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            hasVoted
+                                ? Icons.check_circle_rounded
+                                : Icons.hourglass_top_rounded,
+                            color: hasVoted
+                                ? const Color(0xFF34D399)
+                                : const Color(0xFF64748B),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'JURI $index',
+                            style: TextStyle(
+                              color: hasVoted ? Colors.white : const Color(0xFF94A3B8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ]
+              // ── 2. FINAL RESULT STATE (Hanya Menampilkan 1 Hasil Akhir Saja) ──
+              else ...[
+                // Overlay Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: (_verifikasiHasil == 'biru'
+                                ? const Color(0xFF0284C7)
+                                : _verifikasiHasil == 'merah'
+                                    ? const Color(0xFFE11D48)
+                                    : const Color(0xFFD97706))
+                            .withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _verifikasiHasil == 'invalid'
+                            ? Icons.cancel_outlined
+                            : (_verifikasiHasil == 'biru'
+                                ? (isPelanggaran
+                                    ? Icons.gavel_rounded
+                                    : Icons.sports_martial_arts)
+                                : (isPelanggaran
+                                    ? Icons.gavel_rounded
+                                    : Icons.sports_martial_arts)),
+                        color: _verifikasiHasil == 'biru'
+                            ? const Color(0xFF38BDF8)
+                            : _verifikasiHasil == 'merah'
+                                ? const Color(0xFFFB7185)
+                                : const Color(0xFFFBBF24),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'HASIL VERIFIKASI $jenisTitle',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                        const Text(
+                          'Keputusan Akhir Konsensus Juri Pertandingan',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+                const Divider(color: Color(0xFF1E293B), height: 1),
+                const SizedBox(height: 20),
+
+                // Satu Hasil Akhir Saja (Single Final Result Card)
+                _buildSingleFinalResultCard(
+                  hasil: _verifikasiHasil!,
+                  isPelanggaran: isPelanggaran,
+                ),
+              ],
             ],
           ),
         ),
@@ -2358,78 +2348,178 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     );
   }
 
-  Widget _buildAnonymousSummaryCard({
-    required String label,
-    required int count,
-    required Color color,
-    required Color borderColor,
-    required IconData icon,
-    String? athleteName,
+  Widget _buildSingleFinalResultCard({
+    required String hasil,
+    required bool isPelanggaran,
   }) {
-    final hasVotes = count > 0;
+    final isBiru = hasil == 'biru';
+    final isMerah = hasil == 'merah';
+    final isInvalid = !isBiru && !isMerah;
+
+    final primaryColor = isBiru
+        ? const Color(0xFF0284C7)
+        : isMerah
+            ? const Color(0xFFE11D48)
+            : const Color(0xFFD97706);
+
+    final borderColor = isBiru
+        ? const Color(0xFF38BDF8)
+        : isMerah
+            ? const Color(0xFFFB7185)
+            : const Color(0xFFF59E0B);
+
+    final glowColor = isBiru
+        ? const Color(0xFF0284C7)
+        : isMerah
+            ? const Color(0xFFE11D48)
+            : const Color(0xFFD97706);
+
+    final title = isInvalid
+        ? (isPelanggaran ? 'TIDAK ADA PELANGGARAN' : 'JATUHAN TIDAK SAH')
+        : (isPelanggaran
+            ? (isBiru ? 'PELANGGARAN SUDUT BIRU' : 'PELANGGARAN SUDUT MERAH')
+            : (isBiru ? 'JATUHAN SAH SUDUT BIRU' : 'JATUHAN SAH SUDUT MERAH'));
+
+    final athleteName = isBiru
+        ? _atlit1?.namaLengkap
+        : isMerah
+            ? _atlit2?.namaLengkap
+            : null;
+
+    final kontingen = isBiru
+        ? _atlit1?.kontingen
+        : isMerah
+            ? _atlit2?.kontingen
+            : null;
+
+    final icon = isInvalid
+        ? Icons.cancel_outlined
+        : (isPelanggaran ? Icons.gavel_rounded : Icons.sports_martial_arts);
+
+    final statusTag = isInvalid
+        ? (isPelanggaran
+            ? 'KEPUTUSAN: TIDAK ADA PELANGGARAN'
+            : 'KEPUTUSAN: TIDAK SAH (0 POIN)')
+        : (isPelanggaran
+            ? 'KEPUTUSAN: PELANGGARAN'
+            : 'KEPUTUSAN: SAH (+3 POIN)');
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
       decoration: BoxDecoration(
-        color: hasVotes
-            ? color.withValues(alpha: 0.35)
-            : const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(16),
+        color: primaryColor.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: hasVotes ? borderColor : const Color(0xFF1E293B),
-          width: hasVotes ? 2.2 : 1.2,
+          color: borderColor,
+          width: 3.0,
         ),
-        boxShadow: hasVotes
-            ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 14)]
-            : null,
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.5),
+            blurRadius: 36,
+            spreadRadius: 4,
+          ),
+        ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: hasVotes ? Colors.white : const Color(0xFF64748B),
-            size: 36,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: hasVotes ? Colors.white : const Color(0xFF94A3B8),
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
+          // Icon lingkaran
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primaryColor.withValues(alpha: 0.4),
+              border: Border.all(color: borderColor, width: 2.5),
+              boxShadow: [
+                BoxShadow(
+                  color: glowColor.withValues(alpha: 0.45),
+                  blurRadius: 18,
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 52,
+            ),
           ),
-          if (athleteName != null) ...[
-            const SizedBox(height: 2),
+          const SizedBox(height: 18),
+
+          // Judul Keputusan
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+
+          // Nama Atlit & Kontingen
+          if (athleteName != null && athleteName.isNotEmpty) ...[
+            const SizedBox(height: 8),
             Text(
-              athleteName,
+              athleteName.toUpperCase(),
+              textAlign: TextAlign.center,
               style: TextStyle(
-                color: hasVotes ? borderColor : const Color(0xFF64748B),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
+                color: borderColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            ),
+            if (kontingen != null && kontingen.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                kontingen.toUpperCase(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFCBD5E1),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ] else if (isInvalid) ...[
+            const SizedBox(height: 8),
+            Text(
+              isPelanggaran
+                  ? 'Tidak ditemukan unsur pelanggaran oleh juri'
+                  : 'Teknik jatuhan dinyatakan tidak sah atau tidak memenuhi kriteria',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFCBD5E1),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
-          const SizedBox(height: 10),
+
+          const SizedBox(height: 18),
+
+          // Tag Status Poin / Keputusan
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: hasVotes ? borderColor : const Color(0xFF334155),
+                color: borderColor.withValues(alpha: 0.6),
+                width: 1.5,
               ),
             ),
             child: Text(
-              '$count JURI',
-              style: TextStyle(
-                color: hasVotes ? Colors.white : const Color(0xFF64748B),
-                fontSize: 18,
+              statusTag,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w900,
-                fontFamily: 'monospace',
+                letterSpacing: 1.0,
               ),
             ),
           ),

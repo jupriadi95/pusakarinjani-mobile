@@ -156,21 +156,27 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
     _verifikasiSelesaiSub = _socketService.onVerifikasiSelesai.listen((data) {
       if (!mounted || !_isVerifikasiOpen) return;
+      final action = data['action']?.toString();
       final hasil = data['hasil']?.toString() ?? '';
-      setState(() {
-        _verifikasiFinalVerdict = hasil;
-      });
-      _verifikasiDialogSetState?.call(() {});
 
-      // Auto close after 2.5s
-      Future.delayed(const Duration(milliseconds: 2500), () {
-        if (mounted && _isVerifikasiOpen) {
-          setState(() => _isVerifikasiOpen = false);
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
+      if (action == 'tutup' || action == 'close' || hasil == 'dibatalkan') {
+        // Popup hanya ditutup ketika dewan pertandingan menyelesaikan dialog verifikasi
+        setState(() {
+          _isVerifikasiOpen = false;
+          _verifikasiFinalVerdict = null;
+        });
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
         }
-      });
+      } else {
+        // Tampilkan keputusan akhir konsensus
+        if (hasil.isNotEmpty) {
+          setState(() {
+            _verifikasiFinalVerdict = hasil;
+          });
+          _verifikasiDialogSetState?.call(() {});
+        }
+      }
     });
 
     // ── Babak / Round Change Sync Listener ──
