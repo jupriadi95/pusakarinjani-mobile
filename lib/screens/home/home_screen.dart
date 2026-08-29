@@ -59,71 +59,82 @@ class _HomeScreenState extends State<HomeScreen> {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    // Top Navigation Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.of(context).size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
                         children: [
-                          // System online badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color:
-                                  PusakaTheme.emerald950.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: PusakaTheme.emerald400
-                                    .withValues(alpha: 0.3),
-                              ),
-                            ),
+                          // Top Navigation Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
+                                // System online badge
                                 Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: PusakaTheme.emerald400,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        PusakaTheme.emerald950.withValues(alpha: 0.6),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: PusakaTheme.emerald400
+                                          .withValues(alpha: 0.3),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                const Text(
-                                  'Sistem Gelanggang Online',
-                                  style: TextStyle(
-                                    color: PusakaTheme.emerald400,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: PusakaTheme.emerald400,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        'Sistem Gelanggang Online',
+                                        style: TextStyle(
+                                          color: PusakaTheme.emerald400,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
+
+                          const Spacer(flex: 1),
+
+                          // Hero Section — Emblem + Title
+                          _buildHeroSection().animate().fadeIn(duration: 600.ms).slideY(
+                              begin: 0.1, duration: 600.ms, curve: Curves.easeOut),
+
+                          const SizedBox(height: 24),
+
+                          // Role Selection Cards
+                          ..._buildRoleCards(context),
+
+                          const Spacer(flex: 1),
+
+                          // Footer
+                          _buildFooter(),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
-
-                    const Spacer(flex: 1),
-
-                    // Hero Section — Emblem + Title
-                    _buildHeroSection().animate().fadeIn(duration: 600.ms).slideY(
-                        begin: 0.1, duration: 600.ms, curve: Curves.easeOut),
-
-                    const SizedBox(height: 32),
-
-                    // Role Selection Cards
-                    ..._buildRoleCards(context),
-
-                    const Spacer(flex: 1),
-
-                    // Footer
-                    _buildFooter(),
-                    const SizedBox(height: 12),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -229,6 +240,16 @@ class _HomeScreenState extends State<HomeScreen> {
         badge: 'Live Scoreboard',
         gradient: PusakaTheme.amberGradient,
         route: '/verify/monitor',
+      ),
+      _RoleData(
+        title: 'Time Keeper',
+        subtitle: 'Kontrol Timer Pertandingan',
+        description:
+            'Mulai, jeda, lanjut, dan hentikan timer pertandingan secara real-time.',
+        icon: Icons.timer_rounded,
+        badge: 'Match Timer',
+        gradient: PusakaTheme.emeraldGradient,
+        route: '/verify/timekeeper',
       ),
     ];
 

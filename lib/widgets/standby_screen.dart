@@ -9,70 +9,95 @@ import '../models/gelanggang.dart';
 class StandbyScreen extends StatelessWidget {
   final Event? eventInfo;
   final Gelanggang? gelanggangInfo;
+  final bool? isLargeDisplay;
 
   const StandbyScreen({
     super.key,
     this.eventInfo,
     this.gelanggangInfo,
+    this.isLargeDisplay,
   });
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final bool isLarge = isLargeDisplay ?? (screenSize.width >= 1000);
+
     return Container(
       width: double.infinity,
       height: double.infinity,
       decoration: const BoxDecoration(gradient: PusakaTheme.backgroundGradient),
       child: Stack(
         children: [
-          // Ambient glow
+          // Ambient glow 1 (Center-Left)
           Positioned(
-            top: MediaQuery.of(context).size.height * 0.3,
-            left: MediaQuery.of(context).size.width * 0.3,
+            top: screenSize.height * 0.25,
+            left: screenSize.width * 0.25,
             child: Container(
-              width: 400,
-              height: 400,
+              width: isLarge ? 650 : 400,
+              height: isLarge ? 650 : 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: PusakaTheme.indigo600.withValues(alpha: 0.15),
+                color: PusakaTheme.indigo600.withValues(alpha: isLarge ? 0.20 : 0.15),
               ),
             ),
           ),
 
+          // Ambient glow 2 (Bottom-Right for large monitor display)
+          if (isLarge)
+            Positioned(
+              bottom: 40,
+              right: 60,
+              child: Container(
+                width: 450,
+                height: 450,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: PusakaTheme.amber500.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+
           // Floating particles
-          ...List.generate(8, (i) => _FloatingParticle(index: i)),
+          ...List.generate(isLarge ? 12 : 8, (i) => _FloatingParticle(index: i)),
 
           // Top Header
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.symmetric(
+                horizontal: isLarge ? 32 : 20,
+                vertical: isLarge ? 20 : 16,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
                       Container(
-                        width: 10,
-                        height: 10,
+                        width: isLarge ? 14 : 10,
+                        height: isLarge ? 14 : 10,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           color: PusakaTheme.emerald400,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      const Text(
+                      SizedBox(width: isLarge ? 14 : 10),
+                      Text(
                         'IPSI DIGITAL MONITOR DISPLAY',
                         style: TextStyle(
                           color: PusakaTheme.slate300,
-                          fontSize: 10,
+                          fontSize: isLarge ? 14 : 10,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
+                          letterSpacing: isLarge ? 3 : 2,
                         ),
                       ),
                     ],
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isLarge ? 20 : 14,
+                      vertical: isLarge ? 8 : 6,
+                    ),
                     decoration: BoxDecoration(
                       color: PusakaTheme.indigo950.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(20),
@@ -82,9 +107,9 @@ class StandbyScreen extends StatelessWidget {
                     ),
                     child: Text(
                       'GELANGGANG ${gelanggangInfo?.kodeGelanggang ?? '-'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: PusakaTheme.indigo300,
-                        fontSize: 11,
+                        fontSize: isLarge ? 15 : 11,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2,
                       ),
@@ -97,99 +122,112 @@ class StandbyScreen extends StatelessWidget {
 
           // Center Hero Card
           Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 500),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: PusakaTheme.slate900.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(PusakaTheme.radius3xl),
-                border: Border.all(
-                  color: PusakaTheme.slate800.withValues(alpha: 0.8),
+            child: SingleChildScrollView(
+              child: Container(
+                constraints: BoxConstraints(maxWidth: isLarge ? 780 : 500),
+                margin: EdgeInsets.symmetric(
+                  horizontal: isLarge ? 32 : 24,
+                  vertical: 16,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 40,
-                    offset: const Offset(0, 16),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isLarge ? 48 : 32,
+                  vertical: isLarge ? 36 : 28,
+                ),
+                decoration: BoxDecoration(
+                  color: PusakaTheme.slate900.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(
+                    isLarge ? 32 : PusakaTheme.radius3xl,
                   ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Emblem
-                  _BouncingEmblem(),
-
-                  const SizedBox(height: 24),
-
-                  // Event Name
-                  Text(
-                    eventInfo?.namaEvent ?? 'KEJUARAAN PENCAK SILAT DIGITAL',
-                    style: const TextStyle(
-                      color: PusakaTheme.amber400,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
+                  border: Border.all(
+                    color: PusakaTheme.slate800.withValues(alpha: 0.9),
+                    width: isLarge ? 1.5 : 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: isLarge ? 50 : 40,
+                      offset: const Offset(0, 16),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Bouncing IPSI Logo Emblem
+                    _BouncingEmblem(isLarge: isLarge),
 
-                  const SizedBox(height: 8),
+                    SizedBox(height: isLarge ? 24 : 20),
 
-                  // Main Title
-                  const Text(
-                    'MOHON\nMENUNGGU',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      height: 1.1,
-                      letterSpacing: -0.5,
+                    // Event Name
+                    Text(
+                      eventInfo?.namaEvent?.toUpperCase() ??
+                          'KEJUARAAN PENCAK SILAT DIGITAL',
+                      style: TextStyle(
+                        color: PusakaTheme.amber400,
+                        fontSize: isLarge ? 17 : 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: isLarge ? 2.5 : 2,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
 
-                  const SizedBox(height: 12),
+                    SizedBox(height: isLarge ? 10 : 8),
 
-                  Text(
-                    'Pertandingan pada Gelanggang ${gelanggangInfo?.kodeGelanggang ?? '-'} akan segera dimulai',
-                    style: const TextStyle(
-                      color: PusakaTheme.slate300,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    // Main Title
+                    Text(
+                      'MOHON\nMENUNGGU',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isLarge ? 52 : 36,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05,
+                        letterSpacing: isLarge ? -0.8 : -0.5,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
 
-                  const SizedBox(height: 20),
+                    SizedBox(height: isLarge ? 14 : 10),
 
-                  // Animated pulse bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(
-                      height: 6,
-                      width: 200,
-                      child: LinearProgressIndicator(
-                        backgroundColor: PusakaTheme.slate800,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                            PusakaTheme.indigo500),
+                    Text(
+                      'Pertandingan pada Gelanggang ${gelanggangInfo?.kodeGelanggang ?? '-'} akan segera dimulai',
+                      style: TextStyle(
+                        color: PusakaTheme.slate300,
+                        fontSize: isLarge ? 17 : 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    SizedBox(height: isLarge ? 24 : 18),
+
+                    // Animated pulse bar
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        height: isLarge ? 8 : 6,
+                        width: isLarge ? 300 : 200,
+                        child: LinearProgressIndicator(
+                          backgroundColor: PusakaTheme.slate800,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            PusakaTheme.indigo500,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 16),
+                    SizedBox(height: isLarge ? 18 : 14),
 
-                  const Text(
-                    'STANDBY ARENA • REALTIME BROADCAST ACTIVE',
-                    style: TextStyle(
-                      color: PusakaTheme.slate400,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
+                    Text(
+                      'STANDBY ARENA • REALTIME BROADCAST ACTIVE',
+                      style: TextStyle(
+                        color: PusakaTheme.slate400,
+                        fontSize: isLarge ? 12 : 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: isLarge ? 2.0 : 1.5,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -201,34 +239,37 @@ class StandbyScreen extends StatelessWidget {
             right: 0,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isLarge ? 32 : 20,
+                  vertical: isLarge ? 20 : 16,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Sistem Scoreboard Digital IPSI © 2026',
                       style: TextStyle(
                         color: PusakaTheme.slate400,
-                        fontSize: 10,
+                        fontSize: isLarge ? 13 : 10,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     Row(
                       children: [
                         Container(
-                          width: 6,
-                          height: 6,
+                          width: isLarge ? 9 : 6,
+                          height: isLarge ? 9 : 6,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: PusakaTheme.emerald400,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Text(
+                        SizedBox(width: isLarge ? 8 : 6),
+                        Text(
                           'STATUS ARENA: READY',
                           style: TextStyle(
                             color: PusakaTheme.emerald400,
-                            fontSize: 10,
+                            fontSize: isLarge ? 13 : 10,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -245,8 +286,11 @@ class StandbyScreen extends StatelessWidget {
   }
 }
 
-/// Bouncing emblem icon animation
+/// Bouncing emblem icon animation with IPSI logo
 class _BouncingEmblem extends StatefulWidget {
+  final bool isLarge;
+  const _BouncingEmblem({this.isLarge = false});
+
   @override
   State<_BouncingEmblem> createState() => _BouncingEmblemState();
 }
@@ -272,16 +316,22 @@ class _BouncingEmblemState extends State<_BouncingEmblem>
 
   @override
   Widget build(BuildContext context) {
+    final double size = widget.isLarge ? 115.0 : 72.0;
+    final double radius = widget.isLarge ? 32.0 : 22.0;
+    final double innerRadius = widget.isLarge ? 30.0 : 20.0;
+    final double padding = widget.isLarge ? 14.0 : 8.0;
+    final double bounce = widget.isLarge ? -8.0 : -6.0;
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return Transform.translate(
-          offset: Offset(0, -6 * _controller.value),
+          offset: Offset(0, bounce * _controller.value),
           child: Container(
-            width: 64,
-            height: 64,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(radius),
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -289,22 +339,27 @@ class _BouncingEmblemState extends State<_BouncingEmblem>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: PusakaTheme.indigo500.withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+                  color: PusakaTheme.indigo500.withValues(alpha: 0.35),
+                  blurRadius: widget.isLarge ? 24 : 18,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
-            padding: const EdgeInsets.all(2),
+            padding: const EdgeInsets.all(2.5),
             child: Container(
               decoration: BoxDecoration(
                 color: PusakaTheme.slate950,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(innerRadius),
               ),
-              child: const Icon(
-                Icons.shield,
-                color: PusakaTheme.amber400,
-                size: 28,
+              padding: EdgeInsets.all(padding),
+              child: Image.asset(
+                'assets/img/logo_ipsi.webp',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.sports_kabaddi,
+                  color: PusakaTheme.amber400,
+                  size: widget.isLarge ? 48 : 32,
+                ),
               ),
             ),
           ),
@@ -352,27 +407,25 @@ class _FloatingParticleState extends State<_FloatingParticle>
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        final screenWidth = MediaQuery.of(context).size.width;
         final progress = _controller.value;
-        final y = screenSize.height * (1 - progress * 1.5);
+        final top = screenHeight * (1.0 - progress);
+        final left = screenWidth * _leftPercent + sin(progress * 2 * pi) * 20;
+        final opacity = sin(progress * pi) * 0.25;
+
         return Positioned(
-          left: screenSize.width * _leftPercent,
-          top: y,
-          child: Opacity(
-            opacity: (0.8 - progress * 0.8).clamp(0.0, 0.8),
-            child: Transform.rotate(
-              angle: progress * 12.56, // 4π rotation
-              child: Container(
-                width: _size,
-                height: _size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: PusakaTheme.indigo500.withValues(alpha: 0.15),
-                ),
-              ),
+          top: top,
+          left: left,
+          child: Container(
+            width: _size,
+            height: _size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: PusakaTheme.indigo500.withValues(alpha: opacity),
             ),
           ),
         );

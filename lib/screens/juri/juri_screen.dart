@@ -184,7 +184,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
       }
     });
 
-    // ── Timer Control Sync Listener (Start -> Scoring Console, Stop -> Standby) ──
+    // ── Timer Control Sync Listener (Start → Scoring Console, Stop → Standby) ──
     _timerControlSub = _socketService.onTimerControl.listen((data) {
       if (!mounted) return;
       final action = data['action']?.toString();
@@ -195,12 +195,23 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
           }
         });
       } else if (action == 'start') {
+        // Time Keeper started the match — switch to scoring console
+        // and fetch peserta if not yet loaded.
         setState(() {
           if (_gelanggang != null) {
             _gelanggang = _gelanggang!.copyWith(statusTanding: 'berlangsung');
           }
         });
+        // Fetch peserta so scoring buttons know the athletes
+        if (_atlit1 == null && _gelanggang?.atlit1Id != null) {
+          _fetchPeserta(_gelanggang!.atlit1Id!, 1);
+        }
+        if (_atlit2 == null && _gelanggang?.atlit2Id != null) {
+          _fetchPeserta(_gelanggang!.atlit2Id!, 2);
+        }
       }
+      // 'resume' / 'pause' do not change scoring console visibility —
+      // the match is still active; Juri can continue scoring.
     });
 
     // ── Match Completion / Finished Listener ──
@@ -894,6 +905,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
           StandbyScreen(
             eventInfo: _gelanggang?.event,
             gelanggangInfo: _gelanggang,
+            isLargeDisplay: false,
           ),
 
           // Header with back button, Juri selector, and connection badge

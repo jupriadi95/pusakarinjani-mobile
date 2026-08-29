@@ -21,56 +21,82 @@ class JadwalListNotifier extends StateNotifier<AsyncValue<List<Jadwal>>> {
     try {
       final targetDocId = gelanggang.documentId ?? '';
       final targetId = gelanggang.id?.toString() ?? '';
-      final eventDocId = gelanggang.event?.documentId ??
-          gelanggang.event?.id?.toString() ??
-          '';
-
-      // Use standard Strapi populate=* and pagination to avoid 400 Bad Request on invalid relation keys
-      final Map<String, dynamic> params = {
-        'populate': '*',
-        'pagination[pageSize]': '100',
-        'sort[0]': 'nomor_partai:asc',
-      };
-
-      final response = await _api.findProtect('jadwals', params: params);
-      final data = response['data'] as List? ?? [];
-      final allJadwals =
-          data.map((e) => Jadwal.fromJson(e as Map<String, dynamic>)).toList();
-
-      debugPrint('Total jadwals fetched from Strapi: ${allJadwals.length}');
-
-      // Filter matches for the active gelanggang
       final targetKode = (gelanggang.kodeGelanggang ?? '').toLowerCase().trim();
-      final targetKeterangan = (gelanggang.keterangan ?? '').toLowerCase().trim();
 
-      List<Jadwal> arenaMatches = allJadwals.where((j) {
-        if (j.gelanggang == null) return false;
-        final g = j.gelanggang!;
-        final gDocId = g.documentId ?? '';
-        final gId = g.id?.toString() ?? '';
-        final gKode = (g.kodeGelanggang ?? '').toLowerCase().trim();
-        final gKet = (g.keterangan ?? '').toLowerCase().trim();
+      debugPrint(
+          '[JadwalProvider] Fetching jadwal for gelanggang: docId=$targetDocId, id=$targetId, kode=$targetKode');
 
-        final matchDoc = targetDocId.isNotEmpty && (gDocId == targetDocId || gDocId.contains(targetDocId));
-        final matchId = targetId.isNotEmpty && gId == targetId;
-        final matchKode = targetKode.isNotEmpty && (gKode == targetKode || gKode.contains(targetKode));
-        final matchKet = targetKeterangan.isNotEmpty && (gKet == targetKeterangan || gKet.contains(targetKeterangan));
+      // ── Strategy 1: Filter langsung via Strapi REST berdasarkan documentId gelanggang ──
+      List<Jadwal> arenaMatches = [];
 
-        return matchDoc || matchId || matchKode || matchKet;
-      }).toList();
+      if (targetDocId.isNotEmpty) {
+        final resp1 = await _api.findProtect('jadwals', params: {
+          'populate': '*',
+          'pagination[pageSize]': '200',
+          'sort[0]': 'nomor_partai:asc',
+          'filters[gelanggang][documentId][\$eq]': targetDocId,
+        });
+        final data1 = resp1['data'] as List? ?? [];
+        arenaMatches =
+            data1.map((e) => Jadwal.fromJson(e as Map<String, dynamic>)).toList();
+        debugPrint(
+            '[JadwalProvider] Strategy 1 (docId filter): ${arenaMatches.length} matches');
+      }
 
-      // If no specific match was tagged with this specific gelanggang,
-      // fallback to showing all event matches so the operator can always select!
+      // ── Strategy 2: Filter berdasarkan id gelanggang ──
+      if (arenaMatches.isEmpty && targetId.isNotEmpty) {
+        final resp2 = await _api.findProtect('jadwals', params: {
+          'populate': '*',
+          'pagination[pageSize]': '200',
+          'sort[0]': 'nomor_partai:asc',
+          'filters[gelanggang][id][\$eq]': targetId,
+        });
+        final data2 = resp2['data'] as List? ?? [];
+        arenaMatches =
+            data2.map((e) => Jadwal.fromJson(e as Map<String, dynamic>)).toList();
+        debugPrint(
+            '[JadwalProvider] Strategy 2 (id filter): ${arenaMatches.length} matches');
+      }
+
+      // ── Strategy 3: Fetch all + filter lokal berdasarkan relasi gelanggang yang terpopulasi ──
       if (arenaMatches.isEmpty) {
-        if (eventDocId.isNotEmpty) {
-          final eventMatches = allJadwals.where((j) {
-            final eDoc = j.event?.documentId ?? j.event?.id?.toString() ?? '';
-            return eDoc == eventDocId || eDoc.isEmpty;
-          }).toList();
-          arenaMatches = eventMatches.isNotEmpty ? eventMatches : allJadwals;
-        } else {
-          arenaMatches = allJadwals;
-        }
+        final resp3 = await _api.findProtect('jadwals', params: {
+          'populate': '*',
+          'pagination[pageSize]': '200',
+          'sort[0]': 'nomor_partai:asc',
+        });
+        final data3 = resp3['data'] as List? ?? [];
+        final allJadwals = data3
+            .map((e) => Jadwal.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+        debugPrint(
+            '[JadwalProvider] Strategy 3 all fetch: ${allJadwals.length} total');
+
+        // Filter berdasarkan relasi gelanggang di dalam jadwal
+        arenaMatches = allJadwals.where((j) {
+          final g = j.gelanggang;
+          if (g == null) return false;
+
+          final gDocId = g.documentId ?? '';
+          final gId = g.id?.toString() ?? '';
+          final gKode = (g.kodeGelanggang ?? '').toLowerCase().trim();
+
+          if (targetDocId.isNotEmpty &&
+              gDocId.isNotEmpty &&
+              gDocId == targetDocId) { return true; }
+          if (targetId.isNotEmpty && gId.isNotEmpty && gId == targetId) {
+            return true;
+          }
+          if (targetKode.isNotEmpty &&
+              gKode.isNotEmpty &&
+              gKode == targetKode) { return true; }
+
+          return false;
+        }).toList();
+
+        debugPrint(
+            '[JadwalProvider] Strategy 3 (local filter): ${arenaMatches.length} matches');
       }
 
       // Sort by nomor_partai ascending
@@ -80,7 +106,8 @@ class JadwalListNotifier extends StateNotifier<AsyncValue<List<Jadwal>>> {
         return aNum.compareTo(bNum);
       });
 
-      debugPrint('Final filtered arena matches: ${arenaMatches.length}');
+      debugPrint(
+          '[JadwalProvider] Final arena matches: ${arenaMatches.length}');
       state = AsyncValue.data(arenaMatches);
     } catch (e, st) {
       debugPrint('Error fetching operator jadwal: $e');

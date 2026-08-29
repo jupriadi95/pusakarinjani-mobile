@@ -64,22 +64,33 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     'operator': 'Dewan Pertandingan (KP)',
     'juri': 'Juri Pertandingan',
     'monitor': 'Monitoring Nilai Live',
+    'timekeeper': 'Time Keeper Pertandingan',
   };
 
   Future<void> _verifyCode() async {
     final cleanCode = _code.trim();
-    if (cleanCode.isEmpty) return;
+    if (cleanCode.isEmpty || _isLoading) return;
     setState(() => _isLoading = true);
 
     try {
       final api = ApiService();
-      final response = await api.findProtect('gelanggangs', params: {
-        'filters[kode_gelanggang][\$eq]': cleanCode,
+      // Try case-insensitive lookup first ($eqi), fallback to $eq
+      var response = await api.findProtect('gelanggangs', params: {
+        'filters[kode_gelanggang][\$eqi]': cleanCode,
         'populate[0]': 'event',
         'populate[1]': 'event.cover',
       });
 
-      final data = response['data'] as List?;
+      var data = response['data'] as List?;
+      if (data == null || data.isEmpty) {
+        response = await api.findProtect('gelanggangs', params: {
+          'filters[kode_gelanggang][\$eq]': cleanCode,
+          'populate[0]': 'event',
+          'populate[1]': 'event.cover',
+        });
+        data = response['data'] as List?;
+      }
+
       if (data != null && data.isNotEmpty) {
         final gelanggang =
             Gelanggang.fromJson(data[0] as Map<String, dynamic>);
@@ -117,7 +128,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Error verifyCode: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -421,6 +433,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                                         setState(() {
                                           _code = value;
                                         });
+                                        _verifyCode();
                                       },
                                       pinTheme: PinTheme(
                                         shape: PinCodeFieldShape.box,

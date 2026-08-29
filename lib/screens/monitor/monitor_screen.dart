@@ -186,12 +186,67 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       if (mounted) ref.read(nilaiListProvider.notifier).addFromSocket(newNilai);
     });
 
-    // ── KP nilai persisted via REST (negative deductions) — direct realtime sync ──
+    // ── KP nilai persisted via REST — direct realtime sync & sanction counter update ──
     _nilaiKpSub = _socketService.onNilaiKp.listen((data) {
       if (!mounted) return;
       try {
         final nilai = Nilai.fromJson(Map<String, dynamic>.from(data));
         ref.read(nilaiListProvider.notifier).addFromSocket(nilai);
+
+        final sudut =
+            (data['sudut'] ?? nilai.sudut ?? '').toString().toLowerCase();
+        final jenis =
+            (data['jenis'] ?? nilai.jenis ?? '').toString().toLowerCase();
+        final jumlah = (data['jumlah'] ?? nilai.jumlah ?? 0) is num
+            ? ((data['jumlah'] ?? nilai.jumlah ?? 0) as num).toInt()
+            : (int.tryParse(
+                    (data['jumlah'] ?? nilai.jumlah ?? '0').toString()) ??
+                0);
+        final isRed = sudut == 'merah';
+
+        setState(() {
+          if (jenis == 'binaan') {
+            if (isRed) {
+              _kpBinaanMerah = (_kpBinaanMerah + 1).clamp(0, 2);
+            } else {
+              _kpBinaanBiru = (_kpBinaanBiru + 1).clamp(0, 2);
+            }
+          } else if (jenis == 'batal_binaan') {
+            if (isRed) {
+              _kpBinaanMerah = (_kpBinaanMerah - 1).clamp(0, 2);
+            } else {
+              _kpBinaanBiru = (_kpBinaanBiru - 1).clamp(0, 2);
+            }
+          } else if (jenis == 'teguran') {
+            final count = jumlah == -2 ? 2 : 1;
+            if (isRed) {
+              _kpTeguranMerah = count;
+            } else {
+              _kpTeguranBiru = count;
+            }
+          } else if (jenis == 'batal_teguran') {
+            final count = jumlah == 2 ? 1 : 0;
+            if (isRed) {
+              _kpTeguranMerah = count;
+            } else {
+              _kpTeguranBiru = count;
+            }
+          } else if (jenis == 'pembinaan' || jenis == 'peringatan') {
+            final count = jumlah == -10 ? 2 : 1;
+            if (isRed) {
+              _kpPembinaanMerah = count;
+            } else {
+              _kpPembinaanBiru = count;
+            }
+          } else if (jenis == 'batal_pembinaan' || jenis == 'batal_peringatan') {
+            final count = jumlah == 10 ? 1 : 0;
+            if (isRed) {
+              _kpPembinaanMerah = count;
+            } else {
+              _kpPembinaanBiru = count;
+            }
+          }
+        });
       } catch (e) {
         debugPrint('[Monitor] Error parsing nilai:kp payload: $e');
       }
@@ -200,6 +255,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     // ── KP Sanctions Status Listener ──
     _kpStatusSub = _socketService.onKpStatus.listen((data) {
       if (!mounted) return;
+
+      int safeInt(dynamic v, int fallback) {
+        if (v == null) return fallback;
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        return int.tryParse(v.toString()) ?? fallback;
+      }
+
       final merah = (data['merah'] as Map?) ?? data;
       final biru = (data['biru'] as Map?) ?? data;
 
@@ -216,37 +279,46 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         if (aksi == 'reset_babak') {
           _kpBinaanMerah = 0;
           _kpTeguranMerah = 0;
+          _kpPembinaanMerah = 0;
           _kpBinaanBiru = 0;
           _kpTeguranBiru = 0;
+          _kpPembinaanBiru = 0;
         } else {
-          if (data.containsKey('merah') || data['sudut'] == 'merah') {
+          if (data.containsKey('merah') && data['merah'] is Map) {
+            final m = data['merah'] as Map;
             _kpBinaanMerah =
-                (merah['binaan'] ?? merah['kp_binaan_merah'] ?? _kpBinaanMerah)
-                    as int;
+                safeInt(m['binaan'] ?? m['kp_binaan_merah'], _kpBinaanMerah);
             _kpTeguranMerah =
-                (merah['teguran'] ??
-                        merah['kp_teguran_merah'] ??
-                        _kpTeguranMerah)
-                    as int;
-            _kpPembinaanMerah =
-                (merah['pembinaan'] ??
-                        merah['kp_pembinaan_merah'] ??
-                        _kpPembinaanMerah)
-                    as int;
+                safeInt(m['teguran'] ?? m['kp_teguran_merah'], _kpTeguranMerah);
+            _kpPembinaanMerah = safeInt(
+                m['pembinaan'] ?? m['kp_pembinaan_merah'], _kpPembinaanMerah);
+          } else if (data['sudut'] == 'merah' || data.containsKey('merah')) {
+            _kpBinaanMerah = safeInt(
+                merah['binaan'] ?? merah['kp_binaan_merah'], _kpBinaanMerah);
+            _kpTeguranMerah = safeInt(
+                merah['teguran'] ?? merah['kp_teguran_merah'],
+                _kpTeguranMerah);
+            _kpPembinaanMerah = safeInt(
+                merah['pembinaan'] ?? merah['kp_pembinaan_merah'],
+                _kpPembinaanMerah);
           }
 
-          if (data.containsKey('biru') || data['sudut'] == 'biru') {
+          if (data.containsKey('biru') && data['biru'] is Map) {
+            final b = data['biru'] as Map;
             _kpBinaanBiru =
-                (biru['binaan'] ?? biru['kp_binaan_biru'] ?? _kpBinaanBiru)
-                    as int;
+                safeInt(b['binaan'] ?? b['kp_binaan_biru'], _kpBinaanBiru);
             _kpTeguranBiru =
-                (biru['teguran'] ?? biru['kp_teguran_biru'] ?? _kpTeguranBiru)
-                    as int;
-            _kpPembinaanBiru =
-                (biru['pembinaan'] ??
-                        biru['kp_pembinaan_biru'] ??
-                        _kpPembinaanBiru)
-                    as int;
+                safeInt(b['teguran'] ?? b['kp_teguran_biru'], _kpTeguranBiru);
+            _kpPembinaanBiru = safeInt(
+                b['pembinaan'] ?? b['kp_pembinaan_biru'], _kpPembinaanBiru);
+          } else if (data['sudut'] == 'biru' || data.containsKey('biru')) {
+            _kpBinaanBiru = safeInt(
+                biru['binaan'] ?? biru['kp_binaan_biru'], _kpBinaanBiru);
+            _kpTeguranBiru = safeInt(
+                biru['teguran'] ?? biru['kp_teguran_biru'], _kpTeguranBiru);
+            _kpPembinaanBiru = safeInt(
+                biru['pembinaan'] ?? biru['kp_pembinaan_biru'],
+                _kpPembinaanBiru);
           }
         }
 
@@ -292,9 +364,6 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _showWinnerModal = true;
       });
     });
-
-    _socketService.onJuriVoteConfirm.listen((_) => _fetchNilai());
-    _socketService.onSkorUpdate.listen((_) => _fetchNilai());
 
     // ── Dewan Verification Socket Listeners ──
     _verifikasiMulaiSub = _socketService.onVerifikasiMulai.listen((data) {
@@ -484,8 +553,27 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     if (_gelanggang == null) return;
     final a1 = _gelanggang!.atlit1Id ?? '';
     final a2 = _gelanggang!.atlit2Id ?? '';
-    if (a1.isNotEmpty && a2.isNotEmpty) {
-      await ref.read(nilaiListProvider.notifier).fetchNilai(a1, a2);
+
+    final jadwals = ref.read(jadwalListProvider).valueOrNull ?? [];
+    final activeJadwal = _activeJadwal ??
+        jadwals.where((j) {
+          final bDoc =
+              j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
+          final mDoc =
+              j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
+          return (bDoc != null && bDoc == a1) || (mDoc != null && mDoc == a2);
+        }).firstOrNull;
+
+    final jDocId = activeJadwal?.documentId ?? '';
+    final jId = activeJadwal?.id?.toString() ?? '';
+
+    if (a1.isNotEmpty || a2.isNotEmpty || jDocId.isNotEmpty || jId.isNotEmpty) {
+      await ref.read(nilaiListProvider.notifier).fetchNilai(
+            a1,
+            a2,
+            jadwalDocId: jDocId,
+            jadwalId: jId,
+          );
     }
   }
 
@@ -552,6 +640,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             StandbyScreen(
               eventInfo: _gelanggang?.event,
               gelanggangInfo: _gelanggang,
+              isLargeDisplay: true,
             ),
 
             // Top bar with Back Button & Arena info
@@ -690,6 +779,86 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     );
     final currentBabak = _resolveCurrentBabak();
 
+    // Dynamically derive sanction indicator lights from score history and live state
+    int computeSanctions(String corner, String jenis, int liveState) {
+      final relevant = nilaiList.where((n) {
+        if (!n.isSah) return false;
+        final matchesCorner = (n.sudut?.toLowerCase() == corner.toLowerCase());
+        final isCurrentRound = (n.babak == null ||
+            n.babak!.isEmpty ||
+            n.babak == currentBabak);
+        return matchesCorner && isCurrentRound;
+      }).toList();
+
+      final sorted = List<Nilai>.from(relevant);
+      sorted.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime(2000);
+        final bTime = b.createdAt ?? DateTime(2000);
+        return aTime.compareTo(bTime);
+      });
+
+      if (jenis == 'binaan') {
+        bool hasBinaan = false;
+        int count = 0;
+        for (final n in sorted) {
+          final j = (n.jenis ?? '').toLowerCase();
+          if (j == 'binaan' || j == 'batal_binaan') {
+            hasBinaan = true;
+            if (j == 'binaan') count++;
+            if (j == 'batal_binaan') count--;
+          }
+        }
+        return hasBinaan ? count.clamp(0, 2) : liveState;
+      } else if (jenis == 'teguran') {
+        bool hasTeguran = false;
+        int count = 0;
+        for (final n in sorted) {
+          final j = (n.jenis ?? '').toLowerCase();
+          final p = n.jumlah ?? 0;
+          if (j == 'teguran' || j == 'batal_teguran') {
+            hasTeguran = true;
+            if (j == 'teguran') {
+              count = p == -2 ? 2 : 1;
+            } else if (j == 'batal_teguran') {
+              count = p == 2 ? 1 : 0;
+            }
+          }
+        }
+        return hasTeguran ? count.clamp(0, 2) : liveState;
+      } else if (jenis == 'pembinaan') {
+        bool hasPembinaan = false;
+        int count = 0;
+        for (final n in sorted) {
+          final j = (n.jenis ?? '').toLowerCase();
+          final p = n.jumlah ?? 0;
+          if (j == 'pembinaan' ||
+              j == 'peringatan' ||
+              j == 'batal_pembinaan' ||
+              j == 'batal_peringatan') {
+            hasPembinaan = true;
+            if (j == 'pembinaan' || j == 'peringatan') {
+              count = p == -10 ? 2 : 1;
+            } else if (j == 'batal_pembinaan' || j == 'batal_peringatan') {
+              count = p == 10 ? 1 : 0;
+            }
+          }
+        }
+        return hasPembinaan ? count.clamp(0, 2) : liveState;
+      }
+      return liveState;
+    }
+
+    final finalBinaanBiru = computeSanctions('biru', 'binaan', _kpBinaanBiru);
+    final finalTeguranBiru = computeSanctions('biru', 'teguran', _kpTeguranBiru);
+    final finalPembinaanBiru =
+        computeSanctions('biru', 'pembinaan', _kpPembinaanBiru);
+
+    final finalBinaanMerah = computeSanctions('merah', 'binaan', _kpBinaanMerah);
+    final finalTeguranMerah =
+        computeSanctions('merah', 'teguran', _kpTeguranMerah);
+    final finalPembinaanMerah =
+        computeSanctions('merah', 'pembinaan', _kpPembinaanMerah);
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -752,9 +921,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                               isRed: false,
                               score: atlit1Score,
                               logs: atlit1Logs,
-                              binaan: _kpBinaanBiru,
-                              teguran: _kpTeguranBiru,
-                              pembinaan: _kpPembinaanBiru,
+                              binaan: finalBinaanBiru,
+                              teguran: finalTeguranBiru,
+                              pembinaan: finalPembinaanBiru,
                             ),
                           ),
 
@@ -776,9 +945,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                               isRed: true,
                               score: atlit2Score,
                               logs: atlit2Logs,
-                              binaan: _kpBinaanMerah,
-                              teguran: _kpTeguranMerah,
-                              pembinaan: _kpPembinaanMerah,
+                              binaan: finalBinaanMerah,
+                              teguran: finalTeguranMerah,
+                              pembinaan: finalPembinaanMerah,
                             ),
                           ),
                         ],
@@ -1644,7 +1813,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       decoration: BoxDecoration(
         color: isActive
-            ? themeColor.withValues(alpha: 0.32)
+            ? themeColor.withValues(alpha: 0.28)
             : Colors.black.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
@@ -1654,7 +1823,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: themeColor.withValues(alpha: 0.4),
+                  color: themeColor.withValues(alpha: 0.35),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -1667,35 +1836,59 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              '$label: ',
+              label,
               style: TextStyle(
                 color: isActive ? Colors.white : const Color(0xFFCBD5E1),
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
+                letterSpacing: 0.8,
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? themeColor.withValues(alpha: 0.5)
-                    : const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: isActive ? themeColor : const Color(0xFF475569),
-                  width: 0.8,
-                ),
-              ),
-              child: Text(
-                '$current/$max',
-                style: TextStyle(
-                  color: isActive ? Colors.white : const Color(0xFF94A3B8),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(max, (index) {
+                final isLit = index < current;
+                return Container(
+                  margin: EdgeInsets.only(left: index > 0 ? 5.0 : 0),
+                  width: 15,
+                  height: 15,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isLit ? themeColor : const Color(0xFF0F172A),
+                    border: Border.all(
+                      color: isLit ? Colors.white : const Color(0xFF475569),
+                      width: isLit ? 1.5 : 1.2,
+                    ),
+                    boxShadow: isLit
+                        ? [
+                            BoxShadow(
+                              color: themeColor.withValues(alpha: 0.9),
+                              blurRadius: 8,
+                              spreadRadius: 1.5,
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              blurRadius: 4,
+                              spreadRadius: 0.5,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: isLit
+                      ? Center(
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                            ),
+                          ),
+                        )
+                      : null,
+                );
+              }),
             ),
           ],
         ),
@@ -1828,6 +2021,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       icon = Icons.circle;
     }
 
+    final String babakStr = (n.babak != null &&
+            n.babak!.isNotEmpty &&
+            n.babak != 'null')
+        ? n.babak!
+        : _resolveCurrentBabak();
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
       decoration: BoxDecoration(
@@ -1853,27 +2052,56 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               ),
             ],
           ),
-          if (n.menitKe != null && n.menitKe!.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: borderColor.withValues(alpha: 0.4),
-                  width: 0.8,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(
+                    color: borderColor.withValues(alpha: 0.45),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  'Babak $babakStr',
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.95),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.3,
+                  ),
                 ),
               ),
-              child: Text(
-                n.menitKe!,
-                style: TextStyle(
-                  color: textColor.withValues(alpha: 0.9),
-                  fontSize: 11.5,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w800,
+              if (n.menitKe != null && n.menitKe!.isNotEmpty) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: borderColor.withValues(alpha: 0.4),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    n.menitKe!,
+                    style: TextStyle(
+                      color: textColor.withValues(alpha: 0.9),
+                      fontSize: 11.5,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              ],
+            ],
+          ),
         ],
       ),
     );

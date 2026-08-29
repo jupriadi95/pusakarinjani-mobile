@@ -334,6 +334,16 @@ class SocketService {
     }
   }
 
+  /// Emit KP status update event (sanction counters sync for binaan, teguran, peringatan)
+  void emitKpStatus(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('kp:status', payload);
+      debugPrint('[Socket] Emitted kp:status -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit kp:status: not connected');
+    }
+  }
+
   /// Emit Dewan Verification Start event (Verifikasi Jatuhan / Pelanggaran)
   void emitVerifikasiMulai(Map<String, dynamic> payload) {
     if (_socket != null && _isConnected) {

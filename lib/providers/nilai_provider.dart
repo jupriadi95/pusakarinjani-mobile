@@ -21,8 +21,17 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
     String atlit2Id, {
     String? atlit1AltId,
     String? atlit2AltId,
+    String? jadwalDocId,
+    String? jadwalId,
   }) async {
-    if (atlit1Id.isEmpty && atlit2Id.isEmpty && (atlit1AltId == null || atlit1AltId.isEmpty) && (atlit2AltId == null || atlit2AltId.isEmpty)) {
+    final hasAthletes = atlit1Id.isNotEmpty ||
+        atlit2Id.isNotEmpty ||
+        (atlit1AltId != null && atlit1AltId.isNotEmpty) ||
+        (atlit2AltId != null && atlit2AltId.isNotEmpty);
+    final hasJadwal = (jadwalDocId != null && jadwalDocId.isNotEmpty) ||
+        (jadwalId != null && jadwalId.isNotEmpty);
+
+    if (!hasAthletes && !hasJadwal) {
       state = [];
       return;
     }
@@ -35,6 +44,12 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
         'filters[status][\$ne]': 'ditolak',
       };
 
+      if (jadwalDocId != null && jadwalDocId.isNotEmpty) {
+        params['filters[jadwal][documentId]'] = jadwalDocId;
+      } else if (jadwalId != null && jadwalId.isNotEmpty) {
+        params['filters[jadwal][id]'] = jadwalId;
+      }
+
       final response = await _api.findProtect('nilais', params: params);
       final data = response['data'] as List? ?? [];
       final fetchedList = data
@@ -42,36 +57,97 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
           .where((n) => n.isSah)
           .toList();
 
-      // Filter scores that strictly belong to atlit1 or atlit2
+      // Filter scores that strictly belong to this match and atlit1 or atlit2
       final filteredList = fetchedList.where((n) {
+        // 1. Strict Jadwal filter if score entry has a recorded match reference
+        if (hasJadwal) {
+          if (n.jadwalDocId != null &&
+              n.jadwalDocId!.isNotEmpty &&
+              jadwalDocId != null &&
+              jadwalDocId.isNotEmpty) {
+            if (n.jadwalDocId != jadwalDocId) return false;
+          }
+          if (n.jadwalId != null &&
+              n.jadwalId!.isNotEmpty &&
+              jadwalId != null &&
+              jadwalId.isNotEmpty) {
+            if (n.jadwalId != jadwalId) return false;
+          }
+        }
+
+        // 2. Athlete ID matching
         final doc = n.peserta?.documentId;
         final id = n.peserta?.id?.toString();
-        final matchesA1 = (atlit1Id.isNotEmpty && (doc == atlit1Id || id == atlit1Id)) ||
-                          (atlit1AltId != null && atlit1AltId.isNotEmpty && (doc == atlit1AltId || id == atlit1AltId));
-        final matchesA2 = (atlit2Id.isNotEmpty && (doc == atlit2Id || id == atlit2Id)) ||
-                          (atlit2AltId != null && atlit2AltId.isNotEmpty && (doc == atlit2AltId || id == atlit2AltId));
+        final matchesA1 = (atlit1Id.isNotEmpty &&
+                (doc == atlit1Id || id == atlit1Id)) ||
+            (atlit1AltId != null &&
+                atlit1AltId.isNotEmpty &&
+                (doc == atlit1AltId || id == atlit1AltId));
+        final matchesA2 = (atlit2Id.isNotEmpty &&
+                (doc == atlit2Id || id == atlit2Id)) ||
+            (atlit2AltId != null &&
+                atlit2AltId.isNotEmpty &&
+                (doc == atlit2AltId || id == atlit2AltId));
+
         if (matchesA1 || matchesA2) return true;
-        if (doc == null && n.sudut == 'biru' && (atlit1Id.isNotEmpty || (atlit1AltId != null && atlit1AltId.isNotEmpty))) return true;
-        if (doc == null && n.sudut == 'merah' && (atlit2Id.isNotEmpty || (atlit2AltId != null && atlit2AltId.isNotEmpty))) return true;
-        return false;
+
+        // If score record explicitly belongs to a DIFFERENT athlete, reject it!
+        if (n.peserta != null &&
+            ((doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty))) {
+          return false;
+        }
+
+        // 3. Fallback for unpopulated corner actions (KP actions without athlete object)
+        final isBiru = n.sudut?.toLowerCase() == 'biru' &&
+            (atlit1Id.isNotEmpty ||
+                (atlit1AltId != null && atlit1AltId.isNotEmpty));
+        final isMerah = n.sudut?.toLowerCase() == 'merah' &&
+            (atlit2Id.isNotEmpty ||
+                (atlit2AltId != null && atlit2AltId.isNotEmpty));
+
+        return isBiru || isMerah;
       }).toList();
 
-      // Preserve any optimistic temporary items in state that were created recently (within last 15s)
+      // Preserve any optimistic temporary items OR socket-delivered items in state created recently (within last 45s)
       final now = DateTime.now();
       final optimisticPreserved = state.where((item) {
         if (item.createdAt == null) return false;
-        final isRecent = now.difference(item.createdAt!).inSeconds < 15;
+        final isRecent = now.difference(item.createdAt!).inSeconds < 45;
         if (!isRecent) return false;
-        final isTemporaryOptimistic = (item.documentId == null || item.documentId!.isEmpty) &&
-                                      (item.id != null && item.id! >= 1000000000000);
-        if (!isTemporaryOptimistic) return false;
+        final isTemporaryOrSocket = (item.documentId == null ||
+                item.documentId!.isEmpty) ||
+            (item.id != null && item.id! >= 1000000000000) ||
+            (item.juriId != null && item.juriId!.isNotEmpty);
+        if (!isTemporaryOrSocket) return false;
+
+        if (hasJadwal) {
+          if (item.jadwalDocId != null &&
+              item.jadwalDocId!.isNotEmpty &&
+              jadwalDocId != null &&
+              jadwalDocId.isNotEmpty) {
+            if (item.jadwalDocId != jadwalDocId) return false;
+          }
+          if (item.jadwalId != null &&
+              item.jadwalId!.isNotEmpty &&
+              jadwalId != null &&
+              jadwalId.isNotEmpty) {
+            if (item.jadwalId != jadwalId) return false;
+          }
+        }
 
         final alreadyInFetched = filteredList.any((f) =>
             (f.documentId != null && f.documentId == item.documentId) ||
             (f.id != null && f.id == item.id) ||
-            (f.jenis == item.jenis && f.jumlah == item.jumlah && f.sudut == item.sudut &&
-             f.createdAt != null && item.createdAt != null &&
-             f.createdAt!.difference(item.createdAt!).inMilliseconds.abs() < 2500));
+            (f.jenis == item.jenis &&
+                f.jumlah == item.jumlah &&
+                f.sudut == item.sudut &&
+                f.createdAt != null &&
+                item.createdAt != null &&
+                f.createdAt!
+                        .difference(item.createdAt!)
+                        .inMilliseconds
+                        .abs() <
+                    3500));
         return !alreadyInFetched;
       }).toList();
 
@@ -156,11 +232,12 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
         sudut: newNilai.sudut ?? list[existingIdx].sudut,
         juriId: newNilai.juriId ?? list[existingIdx].juriId,
         juriCount: newNilai.juriCount ?? list[existingIdx].juriCount,
+        babak: newNilai.babak ?? list[existingIdx].babak,
         createdAt: newNilai.createdAt ?? list[existingIdx].createdAt,
       );
-      state = list;
+      state = [...list];
     } else {
-      state = [newNilai, ...state];
+      state = [newNilai, ...list];
     }
   }
 
@@ -191,33 +268,48 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
 }
 
 /// Computed: Total score for an athlete (only counting SAH points, matching by DocId, Id, or Corner)
-int countNilaiForPeserta(List<Nilai> allNilai, String pesertaDocId, {String? sudut}) {
+int countNilaiForPeserta(
+  List<Nilai> allNilai,
+  String pesertaDocId, {
+  String? sudut,
+}) {
   if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) return 0;
   return allNilai
       .where((n) {
         if (!n.isSah) return false;
         final doc = n.peserta?.documentId;
         final id = n.peserta?.id?.toString();
-        final matchesId = pesertaDocId.isNotEmpty && ((doc != null && doc == pesertaDocId) || (id != null && id == pesertaDocId));
-        final matchesSudut = (sudut != null && sudut.isNotEmpty && n.sudut?.toLowerCase() == sudut.toLowerCase());
-        return matchesId || (doc == null && matchesSudut);
+        final matchesId = pesertaDocId.isNotEmpty &&
+            ((doc != null && doc == pesertaDocId) ||
+                (id != null && id == pesertaDocId));
+        final matchesSudut = (sudut != null &&
+            sudut.isNotEmpty &&
+            n.sudut?.toLowerCase() == sudut.toLowerCase());
+        return matchesId || matchesSudut;
       })
       .fold(0, (sum, n) => sum + (n.jumlah ?? 0));
 }
 
 /// Computed: Recent scores for an athlete (latest first)
-List<Nilai> recentNilaiForPeserta(List<Nilai> allNilai, String pesertaDocId, {int limit = 5, String? sudut}) {
+List<Nilai> recentNilaiForPeserta(
+  List<Nilai> allNilai,
+  String pesertaDocId, {
+  int limit = 5,
+  String? sudut,
+}) {
   if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) return [];
-  final filtered = allNilai
-      .where((n) {
-        if (!n.isSah) return false;
-        final doc = n.peserta?.documentId;
-        final id = n.peserta?.id?.toString();
-        final matchesId = pesertaDocId.isNotEmpty && ((doc != null && doc == pesertaDocId) || (id != null && id == pesertaDocId));
-        final matchesSudut = (sudut != null && sudut.isNotEmpty && n.sudut?.toLowerCase() == sudut.toLowerCase());
-        return matchesId || (doc == null && matchesSudut);
-      })
-      .toList();
+  final filtered = allNilai.where((n) {
+    if (!n.isSah) return false;
+    final doc = n.peserta?.documentId;
+    final id = n.peserta?.id?.toString();
+    final matchesId = pesertaDocId.isNotEmpty &&
+        ((doc != null && doc == pesertaDocId) ||
+            (id != null && id == pesertaDocId));
+    final matchesSudut = (sudut != null &&
+        sudut.isNotEmpty &&
+        n.sudut?.toLowerCase() == sudut.toLowerCase());
+    return matchesId || matchesSudut;
+  }).toList();
   filtered.sort((a, b) {
     final aTime = a.createdAt ?? DateTime(2000);
     final bTime = b.createdAt ?? DateTime(2000);

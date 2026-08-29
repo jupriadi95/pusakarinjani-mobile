@@ -26,20 +26,59 @@ class Gelanggang {
   bool get isBerlangsung => statusTanding == 'berlangsung';
   bool get isStandby => statusTanding == 'standby' || statusTanding == null;
 
-  factory Gelanggang.fromJson(Map<String, dynamic> json) {
+  factory Gelanggang.fromJson(Map<String, dynamic> rawJson) {
+    final Map<String, dynamic> json = rawJson['attributes'] is Map
+        ? Map<String, dynamic>.from(rawJson['attributes'] as Map)
+        : rawJson;
+
+    final idVal = rawJson['id'] as int? ?? json['id'] as int?;
+    final docIdVal = (rawJson['documentId'] ?? json['documentId'])?.toString();
+
+    final a1 = (json['atlit_1_id'] ??
+            json['atlet_1_id'] ??
+            json['atlit1Id'] ??
+            json['atlet1Id'] ??
+            rawJson['atlit_1_id'] ??
+            rawJson['atlet_1_id'] ??
+            rawJson['atlit1Id'] ??
+            rawJson['atlet1Id'])
+        ?.toString();
+
+    final a2 = (json['atlit_2_id'] ??
+            json['atlet_2_id'] ??
+            json['atlit2Id'] ??
+            json['atlet2Id'] ??
+            rawJson['atlit_2_id'] ??
+            rawJson['atlet_2_id'] ??
+            rawJson['atlit2Id'] ??
+            rawJson['atlet2Id'])
+        ?.toString();
+
+    final eventData = json['event'] ?? rawJson['event'];
+    Event? resolvedEvent;
+    if (eventData != null && eventData is Map<String, dynamic>) {
+      resolvedEvent = Event.fromJson(eventData);
+    } else if (eventData != null && eventData is Map) {
+      resolvedEvent = Event.fromJson(Map<String, dynamic>.from(eventData));
+    }
+
     return Gelanggang(
-      id: json['id'] as int?,
-      documentId: json['documentId'] as String?,
-      kodeGelanggang: json['kode_gelanggang'] as String?,
-      statusTanding: json['status_tanding'] as String?,
-      atlit1Id: json['atlit_1_id'] as String?,
-      atlit2Id: json['atlit_2_id'] as String?,
-      keterangan: json['keterangan'] as String?,
-      event: json['event'] != null
-          ? (json['event'] is Map<String, dynamic>
-              ? Event.fromJson(json['event'] as Map<String, dynamic>)
-              : null)
-          : null,
+      id: idVal,
+      documentId: docIdVal,
+      kodeGelanggang: (json['kode_gelanggang'] ??
+              json['kodeGelanggang'] ??
+              rawJson['kode_gelanggang'] ??
+              rawJson['kodeGelanggang'])
+          ?.toString(),
+      statusTanding: (json['status_tanding'] ??
+              json['statusTanding'] ??
+              rawJson['status_tanding'] ??
+              rawJson['statusTanding'])
+          ?.toString(),
+      atlit1Id: a1,
+      atlit2Id: a2,
+      keterangan: (json['keterangan'] ?? rawJson['keterangan'])?.toString(),
+      event: resolvedEvent,
     );
   }
 

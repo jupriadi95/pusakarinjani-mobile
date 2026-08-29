@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,6 +72,14 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   StreamSubscription? _babakChangedSub;
   Timer? _fetchNilaiDebounce;
 
+  // ── Buzzer State ──
+  final AudioPlayer _buzzerPlayer = AudioPlayer();
+  int _buzzerCountdown = 0;
+  bool _isBuzzerSounding = false;
+  bool get _isBuzzerActive => _buzzerCountdown > 0 || _isBuzzerSounding;
+  Timer? _buzzerTimer;
+  Timer? _buzzerSoundTimer;
+
   @override
   void initState() {
     super.initState();
@@ -91,9 +100,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       if (gelanggang.isBerlangsung) {
         _fetchPeserta(gelanggang.atlit1Id ?? '', 1); // atlit1 = Biru
         _fetchPeserta(gelanggang.atlit2Id ?? '', 2); // atlit2 = Merah
-        ref
-            .read(nilaiListProvider.notifier)
-            .fetchNilai(gelanggang.atlit1Id ?? '', gelanggang.atlit2Id ?? '');
+        _fetchNilai();
         _startTimer();
       }
 
@@ -115,9 +122,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         if (updated.isBerlangsung) {
           _fetchPeserta(updated.atlit1Id ?? '', 1);
           _fetchPeserta(updated.atlit2Id ?? '', 2);
-          ref
-              .read(nilaiListProvider.notifier)
-              .fetchNilai(updated.atlit1Id ?? '', updated.atlit2Id ?? '');
+          _fetchNilai();
           _startTimer();
         } else {
           _pauseTimer();
@@ -243,10 +248,14 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
       setState(() {
         if (seconds != null) _timerSeconds = seconds;
-        if (action == 'pause') {
-          _pauseTimer();
-        } else if (action == 'resume' || action == 'start') {
+        if (action == 'start') {
+          // Timekeeper mulai pertandingan → aktifkan semua tombol penilaian
+          _tandingStatus = true;
           _startTimer();
+        } else if (action == 'resume') {
+          _startTimer();
+        } else if (action == 'pause') {
+          _pauseTimer();
         } else if (action == 'reset') {
           _pauseTimer();
           _timerSeconds = 0;
@@ -255,6 +264,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           _kpBinaanMerah = 0;
           _kpTeguranMerah = 0;
         } else if (action == 'stop') {
+          // Timekeeper stop pertandingan → nonaktifkan tombol penilaian
+          _tandingStatus = false;
           _pauseTimer();
         }
       });
@@ -477,9 +488,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       _kpPembinaanBiru = j.kpPembinaanBiru;
     });
 
-    if (bId.isNotEmpty || mId.isNotEmpty) {
-      ref.read(nilaiListProvider.notifier).fetchNilai(bId, mId);
-    }
+    _fetchNilai();
 
     // Update gelanggang state so Monitor & Juri screens sync the new athletes immediately
     _updateGelanggang('standby', bId, mId);
@@ -580,33 +589,79 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     }
   }
 
-  void _handleJeda() {
-    if (!_tandingStatus) return;
-    setState(() {
-      _pauseTimer();
-    });
-    _socketService.emitTimerControl({
-      'action': 'pause',
-      'seconds': _timerSeconds,
-      'gelanggangId': ref.read(activeGelanggangProvider)?.documentId,
-    });
-    _showSnack('Waktu Pertandingan Dijeda (Pause)', const Color(0xFFD97706));
+  /// Batalkan hitung mundur atau suara buzzer.
+  Future<void> _cancelBuzzer() async {
+    _buzzerTimer?.cancel();
+    _buzzerSoundTimer?.cancel();
+    try {
+      await _buzzerPlayer.stop();
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _buzzerCountdown = 0;
+        _isBuzzerSounding = false;
+      });
+      _showSnack('Hitung mundur buzzer dibatalkan', PusakaTheme.amber500);
+    }
   }
 
-  void _handleLanjut() {
-    if (!_tandingStatus) return;
+  /// Hitung mundur 5 detik, lalu bunyikan suara buzzer.
+  /// Jika diklik lagi saat sedang hitung mundur/berbunyi, aksi akan dibatalkan.
+  Future<void> _handleBuzzer() async {
+    if (_isBuzzerActive) {
+      await _cancelBuzzer();
+      return;
+    }
+
+    _buzzerTimer?.cancel();
+    _buzzerSoundTimer?.cancel();
+
     setState(() {
-      _startTimer();
+      _buzzerCountdown = 5;
+      _isBuzzerSounding = false;
     });
-    _socketService.emitTimerControl({
-      'action': 'resume',
-      'seconds': _timerSeconds,
-      'gelanggangId': ref.read(activeGelanggangProvider)?.documentId,
+
+    _buzzerTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_buzzerCountdown > 1) {
+        setState(() {
+          _buzzerCountdown--;
+        });
+      } else {
+        timer.cancel();
+        // Hitung mundur selesai (0s) -> Bunyikan audio buzzer
+        setState(() {
+          _buzzerCountdown = 0;
+          _isBuzzerSounding = true;
+        });
+
+        try {
+          await _buzzerPlayer.stop();
+          await _buzzerPlayer.setSource(AssetSource('audio/buzzer.wav'));
+          await _buzzerPlayer.setVolume(1.0);
+          await _buzzerPlayer.resume();
+        } catch (e) {
+          debugPrint('[Dewan] Error playing buzzer: $e');
+        }
+
+        // Hentikan suara setelah 4 detik & reset state
+        _buzzerSoundTimer?.cancel();
+        _buzzerSoundTimer = Timer(const Duration(seconds: 4), () async {
+          if (mounted) {
+            try {
+              await _buzzerPlayer.stop();
+            } catch (_) {}
+            setState(() {
+              _isBuzzerSounding = false;
+            });
+          }
+        });
+      }
     });
-    _showSnack(
-      'Waktu Pertandingan Dilanjutkan (Resume)',
-      const Color(0xFF059669),
-    );
   }
 
   Future<void> _handleStop() async {
@@ -802,9 +857,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       PusakaTheme.indigo500,
     );
 
-    // 3. For cancellation / deduction restoration actions (batal_jatuhan, batal_teguran, batal_pembinaan)
-    // or point-bearing custom KP actions:
-    if (aksi.startsWith('batal_') || point != 0) {
+    // 3. Persist to Strapi: cancellation actions, point-bearing actions, AND binaan/batal_binaan
+    // NOTE: binaan has point=0 but still needs to be saved and broadcast!
+    final isBinaanAction = aksi == 'binaan' || aksi == 'batal_binaan';
+    if (aksi.startsWith('batal_') || point != 0 || isBinaanAction) {
       try {
         final strapiJenis = (aksi == 'batal_jatuhan' || aksi == 'jatuhan')
             ? 'jatuhan'
@@ -1434,580 +1490,684 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
   /// Open comprehensive match selector dialog (Live connected to Riverpod)
   void _showPartaiPickerDialog() {
+    int activeFilterIndex = 0; // 0 = Semua, 1 = Belum Bertanding, 2 = Sudah Bertanding
+
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF090D16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF4338CA), width: 1.8),
-        ),
-        child: Container(
-          width: 760,
-          height: 520,
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Dialog Header with Refresh Action
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: const Color(0xFF090D16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Color(0xFF4338CA), width: 1.8),
+            ),
+            child: Container(
+              width: 820,
+              height: 560,
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 1. Dialog Header with Title, Refresh & Close
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4338CA).withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.format_list_numbered_rounded,
-                          color: Color(0xFF818CF8),
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'PILIH PARTAI PERTANDINGAN',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4338CA).withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.format_list_numbered_rounded,
+                              color: Color(0xFF818CF8),
+                              size: 22,
                             ),
                           ),
-                          Text(
-                            'Pilih partai tanding untuk memuat data atlet sudut biru dan merah',
-                            style: TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 12,
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'DAFTAR PARTAI PERTANDINGAN',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              Text(
+                                'Pilih partai tanding untuk memuat data atlet sudut biru dan merah',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Consumer(
+                            builder: (context, ref, _) {
+                              return IconButton(
+                                tooltip: 'Muat Ulang Jadwal',
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  color: Color(0xFF818CF8),
+                                ),
+                                onPressed: () {
+                                  final g = ref.read(activeGelanggangProvider);
+                                  if (g != null) {
+                                    ref
+                                        .read(jadwalListProvider.notifier)
+                                        .fetchJadwal(g);
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: const Icon(Icons.close, color: Colors.white70),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      Consumer(
-                        builder: (context, ref, _) {
-                          return IconButton(
-                            tooltip: 'Muat Ulang Jadwal',
-                            icon: const Icon(
-                              Icons.refresh,
-                              color: Color(0xFF818CF8),
+
+                  const SizedBox(height: 10),
+                  const Divider(color: Color(0xFF1E293B), height: 1),
+                  const SizedBox(height: 10),
+
+                  // 2. Interactive Filter Bar (Semua, Belum Bertanding, Sudah Bertanding)
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final jadwalState = ref.watch(jadwalListProvider);
+                      final allList = jadwalState.value ?? [];
+
+                      int totalCount = allList.length;
+                      int selesaiCount = allList.where((j) =>
+                          j.status == 'selesai' ||
+                          j.statusTanding == 'selesai' ||
+                          j.pemenang != null).length;
+                      int belumCount = totalCount - selesaiCount;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            _buildFilterTabChip(
+                              label: 'Semua Partai ($totalCount)',
+                              icon: Icons.format_list_bulleted_rounded,
+                              isSelected: activeFilterIndex == 0,
+                              badgeColor: const Color(0xFF6366F1),
+                              onTap: () => setDialogState(() => activeFilterIndex = 0),
                             ),
-                            onPressed: () {
-                              final g = ref.read(activeGelanggangProvider);
-                              if (g != null) {
-                                ref
-                                    .read(jadwalListProvider.notifier)
-                                    .fetchJadwal(g);
-                              }
-                            },
-                          );
-                        },
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close, color: Colors.white70),
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            _buildFilterTabChip(
+                              label: 'Belum Bertanding ($belumCount)',
+                              icon: Icons.hourglass_top_rounded,
+                              isSelected: activeFilterIndex == 1,
+                              badgeColor: const Color(0xFF64748B),
+                              onTap: () => setDialogState(() => activeFilterIndex = 1),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterTabChip(
+                              label: 'Sudah Bertanding ($selesaiCount)',
+                              icon: Icons.check_circle_rounded,
+                              isSelected: activeFilterIndex == 2,
+                              badgeColor: const Color(0xFF10B981),
+                              onTap: () => setDialogState(() => activeFilterIndex = 2),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                ],
-              ),
 
-              const SizedBox(height: 12),
-              const Divider(color: Color(0xFF1E293B), height: 1),
-              const SizedBox(height: 10),
+                  // 3. Match List View connected to Riverpod
+                  Expanded(
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final jadwalState = ref.watch(jadwalListProvider);
 
-              // Match Cards List connected to Riverpod
-              Expanded(
-                child: Consumer(
-                  builder: (context, ref, _) {
-                    final jadwalState = ref.watch(jadwalListProvider);
+                        return jadwalState.when(
+                          data: (allList) {
+                            if (allList.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.event_busy,
+                                      color: Color(0xFF64748B),
+                                      size: 48,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Belum ada jadwal partai di arena ini',
+                                      style: TextStyle(
+                                        color: Color(0xFF94A3B8),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        final g = ref.read(
+                                          activeGelanggangProvider,
+                                        );
+                                        if (g != null) {
+                                          ref
+                                              .read(jadwalListProvider.notifier)
+                                              .fetchJadwal(g);
+                                        }
+                                      },
+                                      icon: const Icon(Icons.refresh, size: 16),
+                                      label: const Text('Muat Ulang Jadwal'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF4F46E5),
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
 
-                    return jadwalState.when(
-                      data: (list) {
-                        if (list.isEmpty) {
-                          return Center(
+                            final displayList = allList.where((j) {
+                              final isSelesai = j.status == 'selesai' ||
+                                  j.statusTanding == 'selesai' ||
+                                  j.pemenang != null;
+                              if (activeFilterIndex == 1) return !isSelesai;
+                              if (activeFilterIndex == 2) return isSelesai;
+                              return true;
+                            }).toList();
+
+                            if (displayList.isEmpty) {
+                              return Center(
+                                child: Text(
+                                  activeFilterIndex == 1
+                                      ? 'Tidak ada partai yang belum bertanding'
+                                      : 'Belum ada partai yang selesai bertanding',
+                                  style: const TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              itemCount: displayList.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, idx) {
+                                final j = displayList[idx];
+                                final isSelected =
+                                    _selectedJadwal?.documentId == j.documentId ||
+                                    (_selectedJadwal?.id != null &&
+                                        _selectedJadwal?.id == j.id);
+                                final isSelesai = j.status == 'selesai' ||
+                                    j.statusTanding == 'selesai' ||
+                                    j.pemenang != null;
+
+                                return InkWell(
+                                  onTap: () {
+                                    _applyJadwalSelection(j);
+                                    Navigator.pop(ctx);
+                                    _showSnack(
+                                      'Memilih Partai #${j.nomorPartai ?? '-'}',
+                                      PusakaTheme.indigo500,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? const Color(0xFF1E1B4B).withValues(alpha: 0.9)
+                                          : (isSelesai
+                                              ? const Color(0xFF064E3B).withValues(alpha: 0.22)
+                                              : const Color(0xFF0F172A)),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? const Color(0xFF6366F1)
+                                            : (isSelesai
+                                                ? const Color(0xFF10B981)
+                                                : const Color(0xFF1E293B)),
+                                        width: isSelected
+                                            ? 2.0
+                                            : (isSelesai ? 1.6 : 1.0),
+                                      ),
+                                      boxShadow: isSelesai
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                                                blurRadius: 8,
+                                                spreadRadius: 0.5,
+                                              ),
+                                            ]
+                                          : (isSelected
+                                              ? [
+                                                  BoxShadow(
+                                                    color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                                                    blurRadius: 8,
+                                                  ),
+                                                ]
+                                              : null),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Partai Number Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? const Color(0xFF4F46E5)
+                                                : (isSelesai
+                                                    ? const Color(0xFF065F46)
+                                                    : const Color(0xFF1E293B)),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: isSelesai
+                                                ? Border.all(
+                                                    color: const Color(0xFF34D399),
+                                                    width: 1.2,
+                                                  )
+                                                : null,
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isSelesai
+                                                        ? Icons.check_circle_rounded
+                                                        : Icons.schedule_rounded,
+                                                    color: isSelesai
+                                                        ? const Color(0xFF34D399)
+                                                        : const Color(0xFF94A3B8),
+                                                    size: 11,
+                                                  ),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    'PARTAI',
+                                                    style: TextStyle(
+                                                      color: isSelesai
+                                                          ? const Color(0xFFA7F3D0)
+                                                          : const Color(0xFFCBD5E1),
+                                                      fontSize: 8.5,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              Text(
+                                                '#${j.nomorPartai ?? '-'}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 14),
+
+                                        // Sudut Biru (Left)
+                                        Expanded(
+                                          flex: 4,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF0369A1).withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: const Color(0xFF0284C7).withValues(alpha: 0.45),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'SUDUT BIRU',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF38BDF8),
+                                                    fontSize: 8.5,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  j.biruPeserta?.namaLengkap ?? 'Belum Ditentukan',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                Text(
+                                                  j.biruPeserta?.kontingen ?? 'Kontingen -',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF7DD3FC),
+                                                    fontSize: 10.5,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        // VS Badge
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF334155),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              'VS',
+                                              style: TextStyle(
+                                                color: Colors.amber,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // Sudut Merah (Right)
+                                        Expanded(
+                                          flex: 4,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF9F1239).withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: const Color(0xFFE11D48).withValues(alpha: 0.45),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'SUDUT MERAH',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFFB7185),
+                                                    fontSize: 8.5,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  j.merahPeserta?.namaLengkap ?? 'Belum Ditentukan',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                Text(
+                                                  j.merahPeserta?.kontingen ?? 'Kontingen -',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFFFDA4AF),
+                                                    fontSize: 10.5,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 14),
+
+                                        // Status Indicator Badge (Sudah Bertanding / Belum Bertanding)
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 3.5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isSelesai
+                                                    ? const Color(0xFF064E3B)
+                                                    : const Color(0xFF1E1B4B),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: isSelesai
+                                                    ? Border.all(color: const Color(0xFF059669), width: 1)
+                                                    : null,
+                                              ),
+                                              child: Text(
+                                                j.kelas?.namaKelas ?? 'Kelas',
+                                                style: TextStyle(
+                                                  color: isSelesai
+                                                      ? const Color(0xFFA7F3D0)
+                                                      : const Color(0xFFA5B4FC),
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            if (isSelesai)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 3,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF065F46),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: const Color(0xFF34D399),
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: const Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.check_circle_rounded,
+                                                      color: Color(0xFF34D399),
+                                                      size: 13,
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      'SUDAH BERTANDING',
+                                                      style: TextStyle(
+                                                        color: Color(0xFF34D399),
+                                                        fontSize: 9.0,
+                                                        fontWeight: FontWeight.w900,
+                                                        letterSpacing: 0.4,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            else
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 3,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1E293B),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: const Color(0xFF475569),
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: const Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.hourglass_empty_rounded,
+                                                      color: Color(0xFF94A3B8),
+                                                      size: 13,
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      'BELUM BERTANDING',
+                                                      style: TextStyle(
+                                                        color: Color(0xFFCBD5E1),
+                                                        fontSize: 9.0,
+                                                        fontWeight: FontWeight.w800,
+                                                        letterSpacing: 0.4,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                          loading: () => const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(color: Color(0xFF818CF8)),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Memuat jadwal partai...',
+                                  style: TextStyle(color: Color(0xFF94A3B8)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          error: (err, st) => Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(
-                                  Icons.event_busy,
-                                  color: Color(0xFF64748B),
-                                  size: 48,
+                                  Icons.error_outline,
+                                  color: Color(0xFFEF4444),
+                                  size: 40,
                                 ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Belum ada jadwal partai di arena ini',
-                                  style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Gagal memuat jadwal: $err',
+                                  style: const TextStyle(
+                                    color: Color(0xFFFCA5A5),
+                                    fontSize: 12,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                ElevatedButton.icon(
+                                const SizedBox(height: 10),
+                                ElevatedButton(
                                   onPressed: () {
-                                    final g = ref.read(
-                                      activeGelanggangProvider,
-                                    );
+                                    final g = ref.read(activeGelanggangProvider);
                                     if (g != null) {
                                       ref
                                           .read(jadwalListProvider.notifier)
                                           .fetchJadwal(g);
                                     }
                                   },
-                                  icon: const Icon(Icons.refresh, size: 16),
-                                  label: const Text('Muat Ulang Jadwal'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF4F46E5),
-                                    foregroundColor: Colors.white,
-                                  ),
+                                  child: const Text('Coba Lagi'),
                                 ),
                               ],
                             ),
-                          );
-                        }
-
-                        return ListView.separated(
-                          itemCount: list.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, idx) {
-                            final j = list[idx];
-                            final isSelected =
-                                _selectedJadwal?.documentId == j.documentId ||
-                                (_selectedJadwal?.id != null &&
-                                    _selectedJadwal?.id == j.id);
-                            final isSelesai = j.status == 'selesai' ||
-                                j.statusTanding == 'selesai' ||
-                                j.pemenang != null;
-
-                            return InkWell(
-                              onTap: () {
-                                _applyJadwalSelection(j);
-                                Navigator.pop(ctx);
-                                _showSnack(
-                                  'Memilih Partai #${j.nomorPartai ?? '-'}',
-                                  PusakaTheme.indigo500,
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? const Color(
-                                          0xFF1E1B4B,
-                                        ).withValues(alpha: 0.85)
-                                      : (isSelesai
-                                          ? const Color(0xFF064E3B)
-                                              .withValues(alpha: 0.25)
-                                          : const Color(0xFF0F172A)),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelesai
-                                        ? const Color(0xFF10B981)
-                                        : (isSelected
-                                            ? const Color(0xFF6366F1)
-                                            : const Color(0xFF1E293B)),
-                                    width: isSelesai
-                                        ? 2.0
-                                        : (isSelected ? 1.8 : 1.0),
-                                  ),
-                                  boxShadow: isSelesai
-                                      ? [
-                                          BoxShadow(
-                                            color: const Color(0xFF10B981)
-                                                .withValues(alpha: 0.4),
-                                            blurRadius: 10,
-                                            spreadRadius: 1,
-                                            offset: const Offset(0, 1),
-                                          ),
-                                        ]
-                                      : (isSelected
-                                          ? [
-                                              BoxShadow(
-                                                color: const Color(0xFF6366F1)
-                                                    .withValues(alpha: 0.3),
-                                                blurRadius: 8,
-                                              ),
-                                            ]
-                                          : null),
-                                ),
-                                child: Row(
-                                  children: [
-                                    // Partai Number Badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFF4F46E5)
-                                            : (isSelesai
-                                                ? const Color(0xFF065F46)
-                                                : const Color(0xFF1E293B)),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: isSelesai
-                                            ? Border.all(
-                                                color: const Color(0xFF34D399),
-                                                width: 1.2,
-                                              )
-                                            : null,
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (isSelesai) ...[
-                                                const Icon(
-                                                  Icons.check_circle_rounded,
-                                                  color: Color(0xFF34D399),
-                                                  size: 11,
-                                                ),
-                                                const SizedBox(width: 3),
-                                              ],
-                                              Text(
-                                                'PARTAI',
-                                                style: TextStyle(
-                                                  color: isSelesai
-                                                      ? const Color(0xFFA7F3D0)
-                                                      : const Color(0xFFCBD5E1),
-                                                  fontSize: 8.5,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Text(
-                                            '#${j.nomorPartai ?? '-'}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 14),
-
-                                    // Sudut Biru (Left)
-                                    Expanded(
-                                      flex: 4,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF0369A1,
-                                          ).withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(
-                                              0xFF0284C7,
-                                            ).withValues(alpha: 0.45),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'SUDUT BIRU',
-                                              style: TextStyle(
-                                                color: Color(0xFF38BDF8),
-                                                fontSize: 8.5,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              j.biruPeserta?.namaLengkap ??
-                                                  'Belum Ditentukan',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              j.biruPeserta?.kontingen ??
-                                                  'Kontingen -',
-                                              style: const TextStyle(
-                                                color: Color(0xFF7DD3FC),
-                                                fontSize: 10.5,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                    // VS Badge
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF334155),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'VS',
-                                          style: TextStyle(
-                                            color: Colors.amber,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    // Sudut Merah (Right)
-                                    Expanded(
-                                      flex: 4,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF9F1239,
-                                          ).withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(
-                                              0xFFE11D48,
-                                            ).withValues(alpha: 0.45),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'SUDUT MERAH',
-                                              style: TextStyle(
-                                                color: Color(0xFFFB7185),
-                                                fontSize: 8.5,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              j.merahPeserta?.namaLengkap ??
-                                                  'Belum Ditentukan',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              j.merahPeserta?.kontingen ??
-                                                  'Kontingen -',
-                                              style: const TextStyle(
-                                                color: Color(0xFFFDA4AF),
-                                                fontSize: 10.5,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 14),
-
-                                    // Class & Selection / Selesai Status
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3.5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isSelesai
-                                                ? const Color(0xFF064E3B)
-                                                : const Color(0xFF1E1B4B),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            border: isSelesai
-                                                ? Border.all(
-                                                    color:
-                                                        const Color(0xFF059669),
-                                                    width: 1,
-                                                  )
-                                                : null,
-                                          ),
-                                          child: Text(
-                                            j.kelas?.namaKelas ?? 'Kelas',
-                                            style: TextStyle(
-                                              color: isSelesai
-                                                  ? const Color(0xFFA7F3D0)
-                                                  : const Color(0xFFA5B4FC),
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        if (isSelesai)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF065F46),
-                                              borderRadius:
-                                                  BorderRadius.circular(5),
-                                              border: Border.all(
-                                                color: const Color(0xFF34D399),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.check_circle_rounded,
-                                                  color: Color(0xFF34D399),
-                                                  size: 13,
-                                                ),
-                                                SizedBox(width: 3),
-                                                Text(
-                                                  'SELESAI',
-                                                  style: TextStyle(
-                                                    color: Color(0xFF34D399),
-                                                    fontSize: 9.5,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          )
-                                        else if (isSelected)
-                                          const Row(
-                                            children: [
-                                              Icon(
-                                                Icons.check_circle,
-                                                color: Color(0xFF34D399),
-                                                size: 16,
-                                              ),
-                                              SizedBox(width: 4),
-                                              Text(
-                                                'Dipilih',
-                                                style: TextStyle(
-                                                  color: Color(0xFF34D399),
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                          ),
                         );
                       },
-                      loading: () => const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(color: Color(0xFF818CF8)),
-                            SizedBox(height: 12),
-                            Text(
-                              'Memuat jadwal partai...',
-                              style: TextStyle(color: Color(0xFF94A3B8)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      error: (err, st) => Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.error_outline,
-                              color: Color(0xFFEF4444),
-                              size: 40,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Gagal memuat jadwal: $err',
-                              style: const TextStyle(
-                                color: Color(0xFFFCA5A5),
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: () {
-                                final g = ref.read(activeGelanggangProvider);
-                                if (g != null) {
-                                  ref
-                                      .read(jadwalListProvider.notifier)
-                                      .fetchJadwal(g);
-                                }
-                              },
-                              child: const Text('Coba Lagi'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilterTabChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color badgeColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? badgeColor.withValues(alpha: 0.25)
+              : const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? badgeColor : const Color(0xFF334155),
+            width: isSelected ? 1.6 : 1.0,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? badgeColor : const Color(0xFF94A3B8),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2017,6 +2177,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   void dispose() {
     _fetchNilaiDebounce?.cancel();
     _matchTimer?.cancel();
+    _buzzerTimer?.cancel();
+    _buzzerSoundTimer?.cancel();
+    _buzzerPlayer.dispose();
     _connectionSub?.cancel();
     _gelanggangSub?.cancel();
     _kpStatusSub?.cancel();
@@ -2049,14 +2212,23 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         _atlitMerah?.id?.toString() ??
         _selectedJadwal?.merahPeserta?.id?.toString() ??
         '';
+    final jDocId = _selectedJadwal?.documentId ?? '';
+    final jId = _selectedJadwal?.id?.toString() ?? '';
 
     if (bDocId.isNotEmpty ||
         mDocId.isNotEmpty ||
         bAltId.isNotEmpty ||
-        mAltId.isNotEmpty) {
-      ref
-          .read(nilaiListProvider.notifier)
-          .fetchNilai(bDocId, mDocId, atlit1AltId: bAltId, atlit2AltId: mAltId);
+        mAltId.isNotEmpty ||
+        jDocId.isNotEmpty ||
+        jId.isNotEmpty) {
+      ref.read(nilaiListProvider.notifier).fetchNilai(
+            bDocId,
+            mDocId,
+            atlit1AltId: bAltId,
+            atlit2AltId: mAltId,
+            jadwalDocId: jDocId,
+            jadwalId: jId,
+          );
     }
   }
 
@@ -3529,7 +3701,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
           const SizedBox(height: 6),
 
-          // ── Match Control Action Buttons (Mulai / Jeda / Lanjut / Selesaikan) ──
+          // ── Match Control Action Buttons (Mulai / Buzzer / Selesaikan) ──
           if (!_tandingStatus) ...[
             // 1. Mulai Pertandingan Button (Full Width)
             Expanded(
@@ -3573,124 +3745,76 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
               ),
             ),
           ] else ...[
-            // 2. Dual Buttons: JEDA (Pause) & LANJUT (Resume)
+            // 2. BUZZER Button (full-width, active during match)
             Expanded(
-              child: Row(
-                children: [
-                  // JEDA (Pause) Button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _isTimerRunning ? _handleJeda : null,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 150),
-                        opacity: _isTimerRunning ? 1.0 : 0.4,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFD97706), Color(0xFFB45309)],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _isTimerRunning
-                                  ? const Color(0xFFFBBF24)
-                                  : Colors.transparent,
-                              width: 1.2,
-                            ),
-                            boxShadow: _isTimerRunning
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFFD97706,
-                                      ).withValues(alpha: 0.4),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(
-                                Icons.pause_rounded,
-                                color: Colors.white,
-                                size: 24,
+              child: GestureDetector(
+                onTap: _handleBuzzer,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    gradient: _isBuzzerSounding
+                        ? const LinearGradient(
+                            colors: [Color(0xFFDC2626), Color(0xFF991B1B)],
+                          )
+                        : _buzzerCountdown > 0
+                            ? const LinearGradient(
+                                colors: [Color(0xFFD97706), Color(0xFFB45309)],
+                              )
+                            : const LinearGradient(
+                                colors: [Color(0xFFEA580C), Color(0xFFC2410C)],
                               ),
-                              SizedBox(height: 2),
-                              Text(
-                                'JEDA',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ],
-                          ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _isBuzzerSounding
+                          ? const Color(0xFFFCA5A5)
+                          : _buzzerCountdown > 0
+                              ? const Color(0xFFFDE047)
+                              : const Color(0xFFFB923C),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isBuzzerSounding
+                                ? const Color(0xFFDC2626)
+                                : _buzzerCountdown > 0
+                                    ? const Color(0xFFD97706)
+                                    : const Color(0xFFEA580C))
+                            .withValues(alpha: _isBuzzerActive ? 0.6 : 0.4),
+                        blurRadius: _isBuzzerActive ? 18 : 10,
+                        spreadRadius: _isBuzzerActive ? 2 : 0,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _isBuzzerSounding
+                            ? Icons.volume_up_rounded
+                            : _buzzerCountdown > 0
+                                ? Icons.cancel_outlined
+                                : Icons.notifications_active_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isBuzzerSounding
+                            ? 'BUZZER BERBUNYI!'
+                            : _buzzerCountdown > 0
+                                ? 'BUZZER (${_buzzerCountdown}s) • TAP BATAL'
+                                : 'BUZZER (5s)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
                         ),
                       ),
-                    ),
+                    ],
                   ),
-
-                  const SizedBox(width: 6),
-
-                  // LANJUT (Resume) Button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: !_isTimerRunning ? _handleLanjut : null,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 150),
-                        opacity: !_isTimerRunning ? 1.0 : 0.4,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF059669), Color(0xFF047857)],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: !_isTimerRunning
-                                  ? const Color(0xFF34D399)
-                                  : Colors.transparent,
-                              width: 1.2,
-                            ),
-                            boxShadow: !_isTimerRunning
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF059669,
-                                      ).withValues(alpha: 0.4),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'LANJUT',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],

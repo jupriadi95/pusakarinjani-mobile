@@ -5,6 +5,7 @@ import 'screens/verify/verify_screen.dart';
 import 'screens/operator/operator_screen.dart';
 import 'screens/juri/juri_screen.dart';
 import 'screens/monitor/monitor_screen.dart';
+import 'screens/timekeeper/timekeeper_screen.dart';
 
 /// Root application widget with routing configuration.
 class PusakaApp extends StatelessWidget {
@@ -46,6 +47,12 @@ class PusakaApp extends StatelessWidget {
           settings,
         );
 
+      case '/verify/timekeeper':
+        return _buildRoute(
+          const VerifyScreen(destination: 'timekeeper'),
+          settings,
+        );
+
       case '/operator':
         return _buildRoute(const OperatorScreen(), settings);
 
@@ -54,6 +61,9 @@ class PusakaApp extends StatelessWidget {
 
       case '/monitor':
         return _buildRoute(const MonitorScreen(), settings);
+
+      case '/timekeeper':
+        return _buildRoute(const TimekeeperScreen(), settings);
 
       default:
         return _buildRoute(const HomeScreen(), settings);
