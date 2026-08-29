@@ -136,6 +136,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             (!updated.isBerlangsung && wasBerlangsung);
         final isStartingNewMatch = updated.isBerlangsung && !wasBerlangsung;
 
+        // Deteksi pergantian partai: atlit berubah → berarti Dewan memilih partai lain
+        final isPartaiBaru =
+            (updated.atlit1Id != _gelanggang?.atlit1Id ||
+                updated.atlit2Id != _gelanggang?.atlit2Id) &&
+            !updated.isBerlangsung;
+
         // ONLY clear score when a match is started!
         if (isStartingNewMatch) {
           ref.read(nilaiListProvider.notifier).clear();
@@ -151,6 +157,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             _kpTeguranBiru = 0;
             _kpPembinaanBiru = 0;
             _liveBabakOverride = null;
+          });
+        }
+
+        // Sembunyikan popup pemenang ketika Dewan memilih partai lain
+        if (isPartaiBaru && _showWinnerModal) {
+          setState(() {
+            _showWinnerModal = false;
           });
         }
 
@@ -485,6 +498,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       if (babak != null && babak.isNotEmpty) {
         setState(() {
           _liveBabakOverride = babak;
+          // Reset hanya indikator kedisiplinan (binaan, teguran, peringatan)
+          // Histori nilai dan total poin TIDAK dihapus
+          _kpBinaanBiru = 0;
+          _kpTeguranBiru = 0;
+          _kpPembinaanBiru = 0;
+          _kpBinaanMerah = 0;
+          _kpTeguranMerah = 0;
+          _kpPembinaanMerah = 0;
         });
       }
     });

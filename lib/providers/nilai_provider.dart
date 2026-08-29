@@ -108,12 +108,8 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
         return isBiru || isMerah;
       }).toList();
 
-      // Preserve any optimistic temporary items OR socket-delivered items in state created recently (within last 45s)
-      final now = DateTime.now();
+      // Preserve any optimistic temporary items OR socket-delivered items in state belonging to the current match
       final optimisticPreserved = state.where((item) {
-        if (item.createdAt == null) return false;
-        final isRecent = now.difference(item.createdAt!).inSeconds < 45;
-        if (!isRecent) return false;
         final isTemporaryOrSocket = (item.documentId == null ||
                 item.documentId!.isEmpty) ||
             (item.id != null && item.id! >= 1000000000000) ||
@@ -134,6 +130,23 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
             if (item.jadwalId != jadwalId) return false;
           }
         }
+
+        final doc = item.peserta?.documentId;
+        final id = item.peserta?.id?.toString();
+        final matchesA1 = (atlit1Id.isNotEmpty &&
+                ((doc != null && doc == atlit1Id) || (id != null && id == atlit1Id))) ||
+            (atlit1AltId != null &&
+                atlit1AltId.isNotEmpty &&
+                ((doc != null && doc == atlit1AltId) || (id != null && id == atlit1AltId)));
+        final matchesA2 = (atlit2Id.isNotEmpty &&
+                ((doc != null && doc == atlit2Id) || (id != null && id == atlit2Id))) ||
+            (atlit2AltId != null &&
+                atlit2AltId.isNotEmpty &&
+                ((doc != null && doc == atlit2AltId) || (id != null && id == atlit2AltId)));
+        final matchesCorner = item.sudut != null &&
+            (item.sudut!.toLowerCase() == 'biru' || item.sudut!.toLowerCase() == 'merah');
+
+        if (!matchesA1 && !matchesA2 && !matchesCorner) return false;
 
         final alreadyInFetched = filteredList.any((f) =>
             (f.documentId != null && f.documentId == item.documentId) ||

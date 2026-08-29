@@ -309,7 +309,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _matchTimer?.cancel();
   }
 
-  Future<void> _handleResetBabak() async {
+  Future<void> _handleBabakSelanjutnya() async {
     final gelanggang = ref.read(activeGelanggangProvider);
     final jadwalDocId = _selectedJadwal?.documentId ?? '';
     final atlitBiruDocId =
@@ -318,75 +318,82 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
     final gelanggangId = gelanggang?.documentId ?? '';
 
-    // 1. Reset timer & disciplinary counters locally
+    // 1. Tentukan babak berikutnya (1 -> 2, 2 -> 3, max 3)
+    final currentBabakInt = int.tryParse(_activeBabak) ?? 1;
+    if (currentBabakInt >= 3) {
+      _showSnack('Sudah berada di BABAK 3 (Babak Terakhir)', Colors.orange);
+      return;
+    }
+    final nextBabakInt = currentBabakInt + 1;
+    final nextBabakStr = nextBabakInt.toString();
+
+    // 2. Reset timer & indikator kedisiplinan (binaan, teguran, peringatan) secara lokal.
+    //    Histori nilai (skor poin) TIDAK dihapus — tetap tampil untuk semua babak.
     _matchTimer?.cancel();
     setState(() {
+      _activeBabak = nextBabakStr;
+      if (_selectedJadwal != null) {
+        _selectedJadwal = _selectedJadwal!.copyWith(babak: nextBabakStr);
+      }
       _isTimerRunning = false;
       _timerSeconds = 120;
+      // Reset hanya indikator kedisiplinan — BUKAN nilai/histori skor
       _kpBinaanBiru = 0;
       _kpTeguranBiru = 0;
+      _kpPembinaanBiru = 0;
       _kpBinaanMerah = 0;
       _kpTeguranMerah = 0;
+      _kpPembinaanMerah = 0;
     });
 
-    // 2. Emit timer:control reset event so all devices sync timer to 02:00
+    // 3. Emit babak:change ke semua perangkat lain (Monitor, Juri, Timekeeper)
+    //    Listener _babakChangedSub di Dewan sendiri cukup aman karena hanya update _activeBabak
+    _socketService.emitBabakChange({
+      'gelanggangId': gelanggangId,
+      'jadwalId': jadwalDocId,
+      'babak': nextBabakStr,
+    });
+
+    // 4. Emit timer:control reset agar semua perangkat sync ke awal babak baru
     _socketService.emitTimerControl({
       'action': 'reset',
       'seconds': 120,
+      'totalSeconds': 120,
       'gelanggangId': gelanggangId,
-      'status': _tandingStatus ? 'berlangsung' : 'standby',
+      'status': 'standby',
       'atlit1Id': atlitBiruDocId,
       'atlit2Id': atlitMerahDocId,
-      'babak': _selectedJadwal?.babak ?? _activeBabak,
+      'babak': nextBabakStr,
     });
 
-    // 3. Emit kp:action reset_babak for both Biru and Merah
-    if (atlitBiruDocId.isNotEmpty) {
-      _socketService.emitKpAction({
-        'gelanggangId': gelanggangId,
-        'jadwalId': jadwalDocId,
-        'atletId': atlitBiruDocId,
-        'sudut': 'biru',
-        'aksi': 'reset_babak',
-        'point': 0,
-        'jumlah': 0,
-        'babak': _selectedJadwal?.babak ?? _activeBabak,
-        'menit_ke': '00:00',
-      });
-    }
-
-    if (atlitMerahDocId.isNotEmpty) {
-      _socketService.emitKpAction({
-        'gelanggangId': gelanggangId,
-        'jadwalId': jadwalDocId,
-        'atletId': atlitMerahDocId,
-        'sudut': 'merah',
-        'aksi': 'reset_babak',
-        'point': 0,
-        'jumlah': 0,
-        'babak': _selectedJadwal?.babak ?? _activeBabak,
-        'menit_ke': '00:00',
-      });
-    }
-
-    // 4. Update Strapi Jadwal record to persist reset
+    // 5. Update Strapi Jadwal record — persist babak baru & reset counter kedisiplinan
     if (jadwalDocId.isNotEmpty) {
       try {
         await _api.updateProtect('jadwals', jadwalDocId, {
           'data': {
+            'babak': nextBabakStr,
             'kp_binaan_biru': 0,
             'kp_teguran_biru': 0,
+            'kp_pembinaan_biru': 0,
             'kp_binaan_merah': 0,
             'kp_teguran_merah': 0,
+            'kp_pembinaan_merah': 0,
           },
         });
       } catch (e) {
-        debugPrint('[Dewan] Error persisting reset_babak to Strapi: $e');
+        debugPrint('[Dewan] Error persisting babak_selanjutnya to Strapi: $e');
       }
     }
 
+    // 6. Reload nilai dari server setelah Strapi selesai memproses.
+    //    Gunakan delay 1.5 detik agar server ada waktu commit perubahan.
+    //    Ini memastikan riwayat nilai dan total poin tetap utuh dan tidak terhapus.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) _fetchNilai();
+    });
+
     _showSnack(
-      'Babak di-reset! Timer kembali 00:00, Binaan & Teguran kembali 0.',
+      'Beralih ke BABAK $nextBabakStr! Binaan, Teguran, & Peringatan di-reset.',
       PusakaTheme.indigo500,
     );
   }
@@ -4040,7 +4047,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                 const SizedBox(height: 6),
 
-                // 3. Reset Babak Button
+                // 3. Babak Selanjutnya Button
                 Opacity(
                   opacity: (_tandingStatus || _selectedJadwal != null)
                       ? 1.0
@@ -4048,7 +4055,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: (_tandingStatus || _selectedJadwal != null)
-                        ? () => _handleResetBabak()
+                        ? () => _handleBabakSelanjutnya()
                         : null,
                     child: Container(
                       width: double.infinity,
@@ -4058,12 +4065,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: (_tandingStatus || _selectedJadwal != null)
-                            ? const Color(0xFF5B21B6)
+                            ? const Color(0xFF4338CA)
                             : const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: (_tandingStatus || _selectedJadwal != null)
-                              ? const Color(0xFF8B5CF6).withValues(alpha: 0.7)
+                              ? const Color(0xFF6366F1).withValues(alpha: 0.7)
                               : const Color(0xFF334155),
                         ),
                       ),
@@ -4071,7 +4078,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.restart_alt,
+                            Icons.skip_next_rounded,
                             color: (_tandingStatus || _selectedJadwal != null)
                                 ? Colors.white
                                 : const Color(0xFF64748B),
@@ -4079,12 +4086,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'RESET BABAK',
+                            'BABAK SELANJUTNYA',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               color: (_tandingStatus || _selectedJadwal != null)
                                   ? Colors.white
                                   : const Color(0xFF64748B),
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
