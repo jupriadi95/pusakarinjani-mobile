@@ -327,8 +327,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     final nextBabakInt = currentBabakInt + 1;
     final nextBabakStr = nextBabakInt.toString();
 
-    // 2. Reset timer & indikator kedisiplinan (binaan, teguran, peringatan) secara lokal.
-    //    Histori nilai (skor poin) TIDAK dihapus — tetap tampil untuk semua babak.
+    // 2. Reset timer & indikator kedisiplinan (hanya binaan & teguran).
+    //    Peringatan (pembinaan) & histori nilai TIDAK dihapus / di-reset.
     _matchTimer?.cancel();
     setState(() {
       _activeBabak = nextBabakStr;
@@ -337,17 +337,14 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       }
       _isTimerRunning = false;
       _timerSeconds = 120;
-      // Reset hanya indikator kedisiplinan — BUKAN nilai/histori skor
+      // Reset hanya binaan & teguran — Peringatan (pembinaan) tetap dipertahankan
       _kpBinaanBiru = 0;
       _kpTeguranBiru = 0;
-      _kpPembinaanBiru = 0;
       _kpBinaanMerah = 0;
       _kpTeguranMerah = 0;
-      _kpPembinaanMerah = 0;
     });
 
     // 3. Emit babak:change ke semua perangkat lain (Monitor, Juri, Timekeeper)
-    //    Listener _babakChangedSub di Dewan sendiri cukup aman karena hanya update _activeBabak
     _socketService.emitBabakChange({
       'gelanggangId': gelanggangId,
       'jadwalId': jadwalDocId,
@@ -366,7 +363,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       'babak': nextBabakStr,
     });
 
-    // 5. Update Strapi Jadwal record — persist babak baru & reset counter kedisiplinan
+    // 5. Update Strapi Jadwal record — persist babak baru & reset binaan/teguran
     if (jadwalDocId.isNotEmpty) {
       try {
         await _api.updateProtect('jadwals', jadwalDocId, {
@@ -374,10 +371,8 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
             'babak': nextBabakStr,
             'kp_binaan_biru': 0,
             'kp_teguran_biru': 0,
-            'kp_pembinaan_biru': 0,
             'kp_binaan_merah': 0,
             'kp_teguran_merah': 0,
-            'kp_pembinaan_merah': 0,
           },
         });
       } catch (e) {

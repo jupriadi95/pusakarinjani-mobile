@@ -498,14 +498,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       if (babak != null && babak.isNotEmpty) {
         setState(() {
           _liveBabakOverride = babak;
-          // Reset hanya indikator kedisiplinan (binaan, teguran, peringatan)
-          // Histori nilai dan total poin TIDAK dihapus
+          // Reset hanya Binaan & Teguran — Peringatan (pembinaan) & histori nilai TIDAK di-reset
           _kpBinaanBiru = 0;
           _kpTeguranBiru = 0;
-          _kpPembinaanBiru = 0;
           _kpBinaanMerah = 0;
           _kpTeguranMerah = 0;
-          _kpPembinaanMerah = 0;
         });
       }
     });

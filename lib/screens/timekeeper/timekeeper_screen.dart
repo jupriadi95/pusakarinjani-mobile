@@ -48,6 +48,7 @@ class _TimekeeperScreenState extends ConsumerState<TimekeeperScreen>
   StreamSubscription<bool>? _connectionSub;
   StreamSubscription<Map<String, dynamic>>? _timerControlSub;
   StreamSubscription<Map<String, dynamic>>? _babakChangedSub;
+  StreamSubscription<Gelanggang>? _gelanggangSub;
   bool _isConnected = false;
 
   // Pulse animation
@@ -83,6 +84,12 @@ class _TimekeeperScreenState extends ConsumerState<TimekeeperScreen>
 
     _connectionSub = _socketService.onConnectionChanged.listen((connected) {
       if (mounted) setState(() => _isConnected = connected);
+    });
+
+    _gelanggangSub = _socketService.onGelanggangUpdated.listen((updated) {
+      if (mounted) {
+        ref.read(activeGelanggangProvider.notifier).updateFromSocket(updated);
+      }
     });
 
     // ── Timer Control Sync Listener ──
@@ -486,28 +493,17 @@ class _TimekeeperScreenState extends ConsumerState<TimekeeperScreen>
     // 1. Update status gelanggang di Strapi → memicu gelanggang:updated ke semua layar
     setState(() => _isUpdatingStrapi = true);
     try {
-      final a1 = gelanggang?.atlit1Id ?? '';
-      final a2 = gelanggang?.atlit2Id ?? '';
       await _api.updateProtect('gelanggangs', gelanggangId, {
         'data': {
           'status_tanding': 'berlangsung',
-          if (a1.isNotEmpty) 'atlit_1_id': a1,
-          if (a2.isNotEmpty) 'atlit_2_id': a2,
         },
       });
 
       // 2. Update provider lokal
-      final updated = Gelanggang(
-        id: gelanggang!.id,
-        documentId: gelanggang.documentId,
-        kodeGelanggang: gelanggang.kodeGelanggang,
-        statusTanding: 'berlangsung',
-        atlit1Id: gelanggang.atlit1Id,
-        atlit2Id: gelanggang.atlit2Id,
-        keterangan: gelanggang.keterangan,
-        event: gelanggang.event,
-      );
-      ref.read(activeGelanggangProvider.notifier).updateFromSocket(updated);
+      if (gelanggang != null) {
+        final updated = gelanggang.copyWith(statusTanding: 'berlangsung');
+        ref.read(activeGelanggangProvider.notifier).updateFromSocket(updated);
+      }
     } catch (e) {
       debugPrint('[Timekeeper] Error updating gelanggang status: $e');
     } finally {
@@ -604,6 +600,7 @@ class _TimekeeperScreenState extends ConsumerState<TimekeeperScreen>
     _connectionSub?.cancel();
     _timerControlSub?.cancel();
     _babakChangedSub?.cancel();
+    _gelanggangSub?.cancel();
     _socketService.disconnect();
     super.dispose();
   }
