@@ -3109,7 +3109,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                 point: -1,
                                 label: 'Teguran 1 (-1)',
                               )
-                            : (teguran == 1 && pembinaan == 0)
+                            : teguran >= 1
                             ? () => _handleKpAction(
                                 'batal_teguran',
                                 _atlitBiru,
@@ -3127,7 +3127,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        (teguran == 1 && pembinaan == 0)
+                        teguran == 1
                             ? () => _handleKpAction(
                                 'teguran',
                                 _atlitBiru,
@@ -3135,7 +3135,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                 point: -2,
                                 label: 'Teguran 2 (-2)',
                               )
-                            : (teguran == 2 && pembinaan == 0)
+                            : teguran == 2
                             ? () => _handleKpAction(
                                 'batal_teguran',
                                 _atlitBiru,
@@ -3195,7 +3195,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        pembinaan == 1
+                        pembinaan < 2
                             ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitBiru,
@@ -3486,7 +3486,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Teguran 2 (-2)',
                         Icons.looks_two_outlined,
                         const Color(0xFF1E293B),
-                        (teguran == 1 && pembinaan == 0)
+                        teguran == 1
                             ? () => _handleKpAction(
                                 'teguran',
                                 _atlitMerah,
@@ -3494,7 +3494,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                 point: -2,
                                 label: 'Teguran 2 (-2)',
                               )
-                            : (teguran == 2 && pembinaan == 0)
+                            : teguran == 2
                             ? () => _handleKpAction(
                                 'batal_teguran',
                                 _atlitMerah,
@@ -3520,7 +3520,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                                 point: -1,
                                 label: 'Teguran 1 (-1)',
                               )
-                            : (teguran == 1 && pembinaan == 0)
+                            : teguran >= 1
                             ? () => _handleKpAction(
                                 'batal_teguran',
                                 _atlitMerah,
@@ -3554,7 +3554,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                         'Peringatan 2 (-10)',
                         Icons.warning_amber_rounded,
                         const Color(0xFF1E293B),
-                        pembinaan == 1
+                        pembinaan < 2
                             ? () => _handleKpAction(
                                 'pembinaan',
                                 _atlitMerah,
