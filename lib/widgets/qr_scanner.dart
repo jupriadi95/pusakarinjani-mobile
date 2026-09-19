@@ -6,11 +6,13 @@ import '../config/theme.dart';
 class QrScannerWidget extends StatefulWidget {
   final ValueChanged<String> onScanned;
   final bool isActive;
+  final String? prompt;
 
   const QrScannerWidget({
     super.key,
     required this.onScanned,
     this.isActive = true,
+    this.prompt,
   });
 
   @override
@@ -185,14 +187,18 @@ class _QrScannerWidgetState extends State<QrScannerWidget> {
                 color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.qr_code_scanner, color: PusakaTheme.indigo400, size: 14),
                   SizedBox(width: 6),
                   Text(
-                    'Arahkan kamera ke QR Code Arena',
-                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    widget.prompt ?? 'Arahkan kamera ke QR Code Arena',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'config/theme.dart';
+import 'screens/mode/mode_selector_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/verify/verify_screen.dart';
 import 'screens/operator/operator_screen.dart';
@@ -27,6 +28,9 @@ class PusakaApp extends StatelessWidget {
 
     switch (name) {
       case '/':
+        return _buildRoute(const ModeSelectorScreen(), settings);
+
+      case '/home':
         return _buildRoute(const HomeScreen(), settings);
 
       case '/verify/operator':
@@ -66,7 +70,7 @@ class PusakaApp extends StatelessWidget {
         return _buildRoute(const TimekeeperScreen(), settings);
 
       default:
-        return _buildRoute(const HomeScreen(), settings);
+        return _buildRoute(const ModeSelectorScreen(), settings);
     }
   }
 

@@ -38,6 +38,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   // ── Selected Juri ID ('juri_1' | 'juri_2' | 'juri_3') ──
   String _selectedJuriId = 'juri_1';
 
+  // ── Juri Ready Status (Standby → Mode Penilaian) ──
+  bool _isJuriReady = false;
+
   // ── Feedback Toast / Banner state ──
   VoteStatusType _voteStatus = VoteStatusType.none;
   String _voteMessage = '';
@@ -91,7 +94,39 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   Future<void> _setJuriId(String id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('saved_juri_id', id);
-    if (mounted) setState(() => _selectedJuriId = id);
+    if (mounted) {
+      setState(() {
+        _selectedJuriId = id;
+        _isJuriReady = false;
+      });
+    }
+  }
+
+  void _setJuriReady(bool ready) {
+    if (!mounted) return;
+    setState(() {
+      _isJuriReady = ready;
+    });
+
+    final payload = {
+      'gelanggangId': _gelanggang?.documentId ?? '',
+      'juriId': _selectedJuriId,
+      'juri_id': _selectedJuriId,
+      'isReady': ready,
+      'is_ready': ready,
+    };
+
+    _socketService.emitJuriReady(payload);
+    debugPrint('[Juri] Emitted juri:ready -> $payload');
+
+    if (ready) {
+      if (_atlit1 == null && _gelanggang?.atlit1Id != null) {
+        _fetchPeserta(_gelanggang!.atlit1Id!, 1);
+      }
+      if (_atlit2 == null && _gelanggang?.atlit2Id != null) {
+        _fetchPeserta(_gelanggang!.atlit2Id!, 2);
+      }
+    }
   }
 
   void _initSocket() {
@@ -196,6 +231,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
       final action = data['action']?.toString();
       if (action == 'stop') {
         setState(() {
+          _isJuriReady = false;
           if (_gelanggang != null) {
             _gelanggang = _gelanggang!.copyWith(statusTanding: 'standby');
           }
@@ -226,6 +262,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     ) {
       if (!mounted) return;
       setState(() {
+        _isJuriReady = false;
         if (_gelanggang != null) {
           _gelanggang = _gelanggang!.copyWith(statusTanding: 'standby');
         }
@@ -876,6 +913,15 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
   @override
   void dispose() {
+    if (_isJuriReady) {
+      _socketService.emitJuriReady({
+        'gelanggangId': _gelanggang?.documentId ?? '',
+        'juriId': _selectedJuriId,
+        'juri_id': _selectedJuriId,
+        'isReady': false,
+        'is_ready': false,
+      });
+    }
     _voteBannerTimer?.cancel();
     _connectionSub?.cancel();
     _gelanggangSub?.cancel();
@@ -895,8 +941,8 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // STATE 1: STANDBY (waiting for match)
-    if (_gelanggang?.statusTanding != 'berlangsung') {
+    // STATE 1: STANDBY (waiting for match, unless this specific juri is ready)
+    if (_gelanggang?.statusTanding != 'berlangsung' && !_isJuriReady) {
       return _buildStandbyState();
     }
 
@@ -905,6 +951,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   }
 
   Widget _buildStandbyState() {
+    final juriNum = _selectedJuriId.replaceAll('juri_', '');
     return Scaffold(
       body: Stack(
         children: [
@@ -923,7 +970,8 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                 children: [
                   GestureDetector(
                     onTap: () {
-                      Navigator.of(context).pushReplacementNamed('/');
+                      if (_isJuriReady) _setJuriReady(false);
+                      Navigator.of(context).pushReplacementNamed('/home');
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -964,6 +1012,97 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ),
+
+          // Prominent READY Indicator Button for Juri in Standby Mode
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 45,
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _setJuriReady(true),
+                  borderRadius: BorderRadius.circular(24),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10B981), Color(0xFF059669)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFF6EE7B7),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.55),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.white24,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'READY (JURI $juriNum)',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Tekan untuk langsung masuk ke mode penilaian',
+                              style: TextStyle(
+                                color: Color(0xFFD1FAE5),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 16),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1158,7 +1297,8 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             children: [
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).pushReplacementNamed('/');
+                  if (_isJuriReady) _setJuriReady(false);
+                  Navigator.of(context).pushReplacementNamed('/home');
                 },
                 child: Container(
                   padding: const EdgeInsets.all(6),
@@ -1200,6 +1340,46 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
           Row(
             children: [
+              if (_isJuriReady) ...[
+                GestureDetector(
+                  onTap: () {
+                    if (_gelanggang?.statusTanding != 'berlangsung') {
+                      _setJuriReady(false);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF065F46),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF34D399)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF34D399),
+                          size: 12,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'READY',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               _buildJuriBadgeButton(),
               const SizedBox(width: 8),
               ConnectionBadge(isConnected: _isConnected),

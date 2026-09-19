@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../config/env.dart';
 import '../../config/theme.dart';
 
 /// Home Screen — Portal Pertandingan Tanding.
@@ -75,17 +76,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                // System online badge
+                                // System mode badge
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color:
-                                        PusakaTheme.emerald950.withValues(alpha: 0.6),
+                                    color: Env.isOffline
+                                        ? PusakaTheme.amber950.withValues(alpha: 0.6)
+                                        : PusakaTheme.emerald950.withValues(alpha: 0.6),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                      color: PusakaTheme.emerald400
-                                          .withValues(alpha: 0.3),
+                                      color: Env.isOffline
+                                          ? PusakaTheme.amber400
+                                              .withValues(alpha: 0.3)
+                                          : PusakaTheme.emerald400
+                                              .withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Row(
@@ -94,16 +99,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                       Container(
                                         width: 6,
                                         height: 6,
-                                        decoration: const BoxDecoration(
+                                        decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: PusakaTheme.emerald400,
+                                          color: Env.isOffline
+                                              ? PusakaTheme.amber400
+                                              : PusakaTheme.emerald400,
                                         ),
                                       ),
                                       const SizedBox(width: 6),
-                                      const Text(
-                                        'Sistem Gelanggang Online',
+                                      Text(
+                                        Env.isOffline
+                                            ? 'Mode Offline — Jaringan Lokal'
+                                            : 'Sistem Gelanggang Online',
                                         style: TextStyle(
-                                          color: PusakaTheme.emerald400,
+                                          color: Env.isOffline
+                                              ? PusakaTheme.amber400
+                                              : PusakaTheme.emerald400,
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
                                         ),

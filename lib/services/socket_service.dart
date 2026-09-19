@@ -40,6 +40,12 @@ class SocketService {
   // ── Match Completion / Finished events ──
   final _pertandinganSelesaiController = StreamController<Map<String, dynamic>>.broadcast();
 
+  // ── Juri Ready Status events ──
+  final _juriReadyController = StreamController<Map<String, dynamic>>.broadcast();
+
+  /// Stream of Juri ready status events
+  Stream<Map<String, dynamic>> get onJuriReady => _juriReadyController.stream;
+
   /// Stream of match completion events
   Stream<Map<String, dynamic>> get onPertandinganSelesai => _pertandinganSelesaiController.stream;
 
@@ -303,6 +309,16 @@ class SocketService {
       }
     });
 
+    // ── Juri Ready Status events ──
+    _socket!.on('juri:ready', (data) {
+      debugPrint('[Socket] juri:ready received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriReadyController.add(data);
+      } else if (data is Map) {
+        _juriReadyController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
     _socket!.connect();
   }
 
@@ -414,6 +430,16 @@ class SocketService {
     }
   }
 
+  /// Emit Juri Ready Status event (READY indicator toggle)
+  void emitJuriReady(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('juri:ready', payload);
+      debugPrint('[Socket] Emitted juri:ready -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit juri:ready: not connected');
+    }
+  }
+
   /// Disconnect and clean up
   void disconnect() {
     _socket?.dispose();
@@ -441,5 +467,6 @@ class SocketService {
     _babakChangedController.close();
     _pertandinganSelesaiController.close();
     _nilaiKpController.close();
+    _juriReadyController.close();
   }
 }

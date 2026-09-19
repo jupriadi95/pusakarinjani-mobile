@@ -3,13 +3,18 @@ import '../config/env.dart';
 
 /// API Service — Replika dari useApiService.ts Nuxt.
 /// Handles all REST API communication with Strapi backend.
+/// Supports re-initialization when switching between Online/Offline modes.
 class ApiService {
-  static final ApiService _instance = ApiService._internal();
+  static ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
 
-  late final Dio _dio;
+  late Dio _dio;
 
   ApiService._internal() {
+    _initDio();
+  }
+
+  void _initDio() {
     _dio = Dio(BaseOptions(
       baseUrl: Env.apiUrl,
       connectTimeout: const Duration(seconds: 15),
@@ -18,6 +23,11 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     ));
+  }
+
+  /// Re-initialize Dio with the current Env URL (call after mode switch).
+  static void reinitialize() {
+    _instance = ApiService._internal();
   }
 
   /// Headers with static protection token (same as Nuxt's fetchWithNoAuth)

@@ -70,7 +70,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   StreamSubscription? _verifikasiVoteSub;
   StreamSubscription? _timerControlSub;
   StreamSubscription? _babakChangedSub;
+  StreamSubscription? _juriReadySub;
   Timer? _fetchNilaiDebounce;
+
+  // ── Juri Ready Status Indicators ──
+  bool _juri1Ready = false;
+  bool _juri2Ready = false;
+  bool _juri3Ready = false;
 
   // ── Buzzer State ──
   final AudioPlayer _buzzerPlayer = AudioPlayer();
@@ -117,6 +123,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
     _gelanggangSub = _socketService.onGelanggangUpdated.listen((updated) {
       if (mounted) {
+        final wasBerlangsung = _tandingStatus;
         setState(() => _tandingStatus = updated.isBerlangsung);
         ref.read(activeGelanggangProvider.notifier).updateFromSocket(updated);
         if (updated.isBerlangsung) {
@@ -126,6 +133,12 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           _startTimer();
         } else {
           _pauseTimer();
+          // Hanya reset lampu indikator juri jika sebelumnya pertandingan sedang berjalan lalu dihentikan/selesai
+          if (wasBerlangsung) {
+            _juri1Ready = false;
+            _juri2Ready = false;
+            _juri3Ready = false;
+          }
         }
       }
     });
@@ -263,10 +276,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           _kpTeguranBiru = 0;
           _kpBinaanMerah = 0;
           _kpTeguranMerah = 0;
+          _juri1Ready = false;
+          _juri2Ready = false;
+          _juri3Ready = false;
         } else if (action == 'stop') {
           // Timekeeper stop pertandingan → nonaktifkan tombol penilaian
           _tandingStatus = false;
           _pauseTimer();
+          _juri1Ready = false;
+          _juri2Ready = false;
+          _juri3Ready = false;
         }
       });
     });
@@ -283,6 +302,26 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           }
         });
       }
+    });
+
+    // ── Juri Ready Status Listener ──
+    _juriReadySub = _socketService.onJuriReady.listen((data) {
+      if (!mounted) return;
+      debugPrint('[Dewan] juri:ready received: $data');
+      final juriId = data['juriId']?.toString() ??
+          data['juri_id']?.toString() ??
+          data['juri']?.toString() ??
+          '';
+      final isReady = data['isReady'] == true ||
+          data['is_ready'] == true ||
+          data['ready'] == true ||
+          data['isReady'] == 'true';
+
+      setState(() {
+        if (juriId == 'juri_1' || juriId == '1') _juri1Ready = isReady;
+        if (juriId == 'juri_2' || juriId == '2') _juri2Ready = isReady;
+        if (juriId == 'juri_3' || juriId == '3') _juri3Ready = isReady;
+      });
     });
   }
 
@@ -494,6 +533,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       _kpBinaanBiru = j.kpBinaanBiru;
       _kpTeguranBiru = j.kpTeguranBiru;
       _kpPembinaanBiru = j.kpPembinaanBiru;
+
+      // Reset Juri ready indicators for new match
+      _juri1Ready = false;
+      _juri2Ready = false;
+      _juri3Ready = false;
     });
 
     _fetchNilai();
@@ -540,7 +584,6 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     String at2Id,
   ) async {
     final gelanggang = ref.read(activeGelanggangProvider);
-    if (gelanggang?.documentId == null) return false;
 
     try {
       await _api.updateProtect('gelanggangs', gelanggang!.documentId!, {
@@ -2203,6 +2246,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _verifikasiVoteSub?.cancel();
     _timerControlSub?.cancel();
     _babakChangedSub?.cancel();
+    _juriReadySub?.cancel();
     // Do NOT call _socketService.disconnect() — socket is a shared singleton via Riverpod provider
     // Restore orientation
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -2376,7 +2420,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.of(context).pushReplacementNamed('/'),
+                onTap: () => Navigator.of(context).pushReplacementNamed('/home'),
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -2556,8 +2600,139 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
           const SizedBox(width: 8),
 
-          // ── 2. KOTAK PILIH PARTAI TANDING (EXPANDED) ──
+          // ── 2. KOTAK STATUS JURI (3 LAMPUS INDIKATOR READY) ──
+          _buildJuriIndicatorBox(),
+
+          const SizedBox(width: 8),
+
+          // ── 3. KOTAK PILIH PARTAI TANDING (EXPANDED) ──
           Expanded(child: _buildPartaiSelectorBox(isLocked)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJuriIndicatorBox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6.5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.6),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header Label
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.how_to_reg_rounded,
+                  size: 16,
+                  color: Color(0xFF34D399),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'JURI:',
+                style: TextStyle(
+                  color: Color(0xFF34D399),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+
+          // 3 LED Dots for Juri 1, Juri 2, Juri 3
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildJuriDotIndicator('1', _juri1Ready),
+              const SizedBox(width: 5),
+              _buildJuriDotIndicator('2', _juri2Ready),
+              const SizedBox(width: 5),
+              _buildJuriDotIndicator('3', _juri3Ready),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJuriDotIndicator(String label, bool isReady) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: isReady
+            ? const Color(0xFF065F46).withValues(alpha: 0.85)
+            : const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isReady ? const Color(0xFF34D399) : const Color(0xFF334155),
+          width: isReady ? 1.5 : 1.0,
+        ),
+        boxShadow: isReady
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Lampu LED titik
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isReady ? const Color(0xFF34D399) : const Color(0xFF64748B),
+              boxShadow: isReady
+                  ? [
+                      const BoxShadow(
+                        color: Color(0xFF34D399),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            'J$label',
+            style: TextStyle(
+              color: isReady ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
