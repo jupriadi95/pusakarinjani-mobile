@@ -684,7 +684,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   children: [
                     GestureDetector(
                       onTap: () {
-                        Navigator.of(context).pushReplacementNamed('/');
+                        Navigator.of(context).pushReplacementNamed('/home');
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -1151,7 +1151,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               // Back / Exit Button
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).pushReplacementNamed('/');
+                  Navigator.of(context).pushReplacementNamed('/home');
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -1642,11 +1642,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
                 const SizedBox(height: 8),
 
-                // ── 50% Atas: Side-by-Side Total Score & Athlete Photo ──
+                // ── Bagian Atas: Side-by-Side Total Score & Athlete Photo (Proporsi Lebih Tinggi) ──
                 // Sudut Biru: Score on Left, Photo on Right
                 // Sudut Merah: Photo on Left, Score on Right
                 Expanded(
-                  flex: 1,
+                  flex: 6,
                   child: _buildScoreAndPhotoSection(
                     atlit: atlit,
                     isRed: isRed,
@@ -1659,8 +1659,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
                 const SizedBox(height: 8),
 
-                // ── 50% Bawah: Score History Box ──
-                Expanded(flex: 1, child: _buildScoreHistoryList(logs, isRed)),
+                // ── Bagian Bawah: Score History Box (Tinggi Sedikit Lebih Ringkas) ──
+                Expanded(flex: 4, child: _buildScoreHistoryList(logs, isRed)),
               ],
             ),
           ),
@@ -1669,7 +1669,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     );
   }
 
-  /// Side-by-Side Score & Large Photo Box (135pt height)
+  /// Side-by-Side Score & Large Photo Box
   Widget _buildScoreAndPhotoSection({
     required Peserta? atlit,
     required bool isRed,
@@ -1683,26 +1683,33 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       child: Container(
         height: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: 2.0),
+          color: Colors.black.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor, width: 2.5),
           boxShadow: [
-            BoxShadow(color: glowColor.withValues(alpha: 0.35), blurRadius: 18),
+            BoxShadow(
+              color: glowColor.withValues(alpha: 0.45),
+              blurRadius: 24,
+              spreadRadius: 2,
+            ),
           ],
         ),
         child: Center(
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               child: Text(
                 '$score',
                 style: TextStyle(
-                  fontSize: 78,
+                  fontSize: 110,
                   fontWeight: FontWeight.w900,
                   fontFamily: 'monospace',
                   color: Colors.white,
-                  shadows: [Shadow(color: glowColor, blurRadius: 24)],
+                  shadows: [
+                    Shadow(color: glowColor, blurRadius: 36),
+                    const Shadow(color: Colors.black54, blurRadius: 10),
+                  ],
                 ),
               ),
             ),
@@ -1717,13 +1724,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         height: double.infinity,
         decoration: BoxDecoration(
           color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: borderColor.withValues(alpha: 0.9),
-            width: 2.0,
+            width: 2.5,
           ),
           boxShadow: [
-            BoxShadow(color: glowColor.withValues(alpha: 0.3), blurRadius: 14),
+            BoxShadow(color: glowColor.withValues(alpha: 0.3), blurRadius: 16),
           ],
         ),
         clipBehavior: Clip.antiAlias,
@@ -1839,67 +1846,74 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   ) {
     final isActive = current > 0;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
         color: isActive
-            ? themeColor.withValues(alpha: 0.28)
-            : Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(8),
+            ? themeColor.withValues(alpha: 0.25)
+            : const Color(0xFF0B111E).withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isActive ? themeColor : const Color(0xFF334155),
-          width: isActive ? 1.6 : 1.0,
+          color: isActive ? themeColor : const Color(0xFF1E293B),
+          width: isActive ? 2.0 : 1.2,
         ),
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: themeColor.withValues(alpha: 0.35),
-                  blurRadius: 10,
+                  color: themeColor.withValues(alpha: 0.45),
+                  blurRadius: 12,
                   offset: const Offset(0, 2),
                 ),
               ]
             : null,
       ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── TULISAN KETERANGAN ──
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
               label,
               style: TextStyle(
-                color: isActive ? Colors.white : const Color(0xFFCBD5E1),
-                fontSize: 12.5,
+                color: isActive ? Colors.white : const Color(0xFF94A3B8),
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 0.8,
+                letterSpacing: 1.0,
               ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(width: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+          ),
+          const SizedBox(height: 6),
+
+          // ── LAMPU INDIKATOR JAUH LEBIH BESAR (32px) DI BAWAH TULISAN ──
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(max, (index) {
                 final isLit = index < current;
                 return Container(
-                  margin: EdgeInsets.only(left: index > 0 ? 5.0 : 0),
-                  width: 15,
-                  height: 15,
+                  margin: EdgeInsets.only(left: index > 0 ? 10.0 : 0),
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isLit ? themeColor : const Color(0xFF0F172A),
                     border: Border.all(
-                      color: isLit ? Colors.white : const Color(0xFF475569),
-                      width: isLit ? 1.5 : 1.2,
+                      color: isLit ? Colors.white : const Color(0xFF334155),
+                      width: isLit ? 2.4 : 1.5,
                     ),
                     boxShadow: isLit
                         ? [
                             BoxShadow(
-                              color: themeColor.withValues(alpha: 0.9),
-                              blurRadius: 8,
-                              spreadRadius: 1.5,
+                              color: themeColor.withValues(alpha: 0.95),
+                              blurRadius: 14,
+                              spreadRadius: 2.5,
                             ),
                             BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              blurRadius: 4,
-                              spreadRadius: 0.5,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              blurRadius: 6,
+                              spreadRadius: 1.0,
                             ),
                           ]
                         : null,
@@ -1907,8 +1921,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   child: isLit
                       ? Center(
                           child: Container(
-                            width: 5,
-                            height: 5,
+                            width: 10,
+                            height: 10,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               color: Colors.white,
@@ -1919,8 +1933,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 );
               }),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2144,6 +2158,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     final jenisTitle = _verifikasiJenis.toUpperCase();
     final isFinalResult = _verifikasiHasil != null;
 
+    final votes = _verifikasiVotes.values.where((v) => v != null).toList();
+    final countBiru = votes.where((v) => v == 'biru').length;
+    final countMerah = votes.where((v) => v == 'merah').length;
+    final countInvalid = votes
+        .where((v) => v == 'invalid' || v == 'tidak_sah' || v == 'batal')
+        .length;
+    final totalMasuk = votes.length;
+
     return Container(
       color: Colors.black.withValues(alpha: 0.92),
       child: Center(
@@ -2193,8 +2215,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 90,
-                      height: 90,
+                      width: 80,
+                      height: 80,
                       child: CircularProgressIndicator(
                         strokeWidth: 4.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -2211,11 +2233,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       color: isPelanggaran
                           ? const Color(0xFFFBBF24)
                           : const Color(0xFF38BDF8),
-                      size: 40,
+                      size: 38,
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Text(
                   'VERIFIKASI $jenisTitle SEDANG BERLANGSUNG',
                   textAlign: TextAlign.center,
@@ -2226,65 +2248,24 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Mohon Menunggu, Ketiga Juri Sedang Mengambil Keputusan...',
+                const SizedBox(height: 6),
+                Text(
+                  'Sedang Menunggu Keputusan Juri ($totalMasuk / 3 Juri Masuk)',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xFF94A3B8),
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Anonymous Juri Status Indicator Chips
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: ['juri_1', 'juri_2', 'juri_3'].asMap().entries.map((e) {
-                    final index = e.key + 1;
-                    final juriKey = e.value;
-                    final hasVoted = _verifikasiVotes[juriKey] != null;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: hasVoted
-                            ? const Color(0xFF059669).withValues(alpha: 0.25)
-                            : const Color(0xFF1E293B).withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: hasVoted
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFF334155),
-                          width: hasVoted ? 1.5 : 1.0,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            hasVoted
-                                ? Icons.check_circle_rounded
-                                : Icons.hourglass_top_rounded,
-                            color: hasVoted
-                                ? const Color(0xFF34D399)
-                                : const Color(0xFF64748B),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'JURI $index',
-                            style: TextStyle(
-                              color: hasVoted ? Colors.white : const Color(0xFF94A3B8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+
+                // ── TAMPILAN JUMLAH VOTE JURI (RINGKASAN HASIL VOTE) ──
+                _buildVoteTallyCards(
+                  countBiru: countBiru,
+                  countMerah: countMerah,
+                  countInvalid: countInvalid,
+                  isPelanggaran: isPelanggaran,
                 ),
                 const SizedBox(height: 12),
               ]
@@ -2353,10 +2334,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 const Divider(color: Color(0xFF1E293B), height: 1),
                 const SizedBox(height: 20),
 
-                // Satu Hasil Akhir Saja (Single Final Result Card)
+                // Satu Hasil Akhir Saja (Single Final Result Card) dengan Summary Vote
                 _buildSingleFinalResultCard(
                   hasil: _verifikasiHasil!,
                   isPelanggaran: isPelanggaran,
+                  countBiru: countBiru,
+                  countMerah: countMerah,
+                  countInvalid: countInvalid,
                 ),
               ],
             ],
@@ -2366,9 +2350,145 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     );
   }
 
+  Widget _buildVoteTallyCards({
+    required int countBiru,
+    required int countMerah,
+    required int countInvalid,
+    required bool isPelanggaran,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 1. Sudut Biru Card (Kiri)
+        Expanded(
+          child: _buildVoteCountCard(
+            label: 'SUDUT BIRU',
+            count: countBiru,
+            accentColor: const Color(0xFF0284C7),
+            lightColor: const Color(0xFF38BDF8),
+            icon: Icons.shield_rounded,
+          ),
+        ),
+        const SizedBox(width: 14),
+
+        // 2. Invalid / Tidak Sah Card (Tengah)
+        Expanded(
+          child: _buildVoteCountCard(
+            label: isPelanggaran ? 'TIDAK ADA PELANGGARAN' : 'TIDAK SAH / INVALID',
+            count: countInvalid,
+            accentColor: const Color(0xFFD97706),
+            lightColor: const Color(0xFFFBBF24),
+            icon: isPelanggaran ? Icons.verified_user_rounded : Icons.cancel_outlined,
+          ),
+        ),
+        const SizedBox(width: 14),
+
+        // 3. Sudut Merah Card (Kanan)
+        Expanded(
+          child: _buildVoteCountCard(
+            label: 'SUDUT MERAH',
+            count: countMerah,
+            accentColor: const Color(0xFFE11D48),
+            lightColor: const Color(0xFFFB7185),
+            icon: Icons.shield_rounded,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoteCountCard({
+    required String label,
+    required int count,
+    required Color accentColor,
+    required Color lightColor,
+    required IconData icon,
+  }) {
+    final hasVotes = count > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+      decoration: BoxDecoration(
+        color: hasVotes
+            ? accentColor.withValues(alpha: 0.28)
+            : const Color(0xFF1E293B).withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasVotes ? lightColor : const Color(0xFF334155),
+          width: hasVotes ? 2.5 : 1.4,
+        ),
+        boxShadow: hasVotes
+            ? [
+                BoxShadow(
+                  color: accentColor.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: lightColor, size: 20),
+              const SizedBox(width: 8),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: hasVotes ? Colors.white : const Color(0xFF94A3B8),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: hasVotes ? lightColor : const Color(0xFF64748B),
+                  fontSize: 44,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'JURI',
+                style: TextStyle(
+                  color: hasVotes ? Colors.white70 : const Color(0xFF64748B),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSingleFinalResultCard({
     required String hasil,
     required bool isPelanggaran,
+    required int countBiru,
+    required int countMerah,
+    required int countInvalid,
   }) {
     final isBiru = hasil == 'biru';
     final isMerah = hasil == 'merah';
@@ -2424,7 +2544,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
         color: primaryColor.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(20),
@@ -2445,7 +2565,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         children: [
           // Icon lingkaran
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: primaryColor.withValues(alpha: 0.4),
@@ -2460,10 +2580,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             child: Icon(
               icon,
               color: Colors.white,
-              size: 52,
+              size: 44,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
 
           // Judul Keputusan
           Text(
@@ -2471,7 +2591,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 28,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.2,
             ),
@@ -2479,13 +2599,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
           // Nama Atlit & Kontingen
           if (athleteName != null && athleteName.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               athleteName.toUpperCase(),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: borderColor,
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.8,
               ),
@@ -2497,14 +2617,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFFCBD5E1),
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                 ),
               ),
             ],
           ] else if (isInvalid) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               isPelanggaran
                   ? 'Tidak ditemukan unsur pelanggaran oleh juri'
@@ -2512,17 +2632,17 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFFCBD5E1),
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
 
           // Tag Status Poin / Keputusan
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(20),
@@ -2535,11 +2655,23 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               statusTag,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 12.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.0,
               ),
             ),
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(color: Color(0xFF1E293B), height: 1),
+          const SizedBox(height: 12),
+
+          // Tampilan Perolehan Vote Juri
+          _buildVoteTallyCards(
+            countBiru: countBiru,
+            countMerah: countMerah,
+            countInvalid: countInvalid,
+            isPelanggaran: isPelanggaran,
           ),
         ],
       ),

@@ -2,31 +2,43 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Pusaka Web (LAN / IP Address)",
+      "name": "Pusaka (Port 1922 - Default)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "-d",
-        "web-server",
-        "--web-hostname",
-        "0.0.0.0",
         "--web-port",
-        "8080"
+        "1922",
+        "--web-hostname",
+        "0.0.0.0"
       ]
     },
     {
-      "name": "Pusaka Web (Chrome + LAN)",
+      "name": "Pusaka Web (Chrome - Port 1922)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
         "-d",
         "chrome",
-        "--web-hostname",
-        "0.0.0.0",
         "--web-port",
-        "8080"
+        "1922",
+        "--web-hostname",
+        "0.0.0.0"
+      ]
+    },
+    {
+      "name": "Pusaka Web Server (LAN 0.0.0.0:1922)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "web-server",
+        "--web-port",
+        "1922",
+        "--web-hostname",
+        "0.0.0.0"
       ]
     }
   ]

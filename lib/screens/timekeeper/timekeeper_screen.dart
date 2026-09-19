@@ -774,7 +774,7 @@ class _TimekeeperScreenState extends ConsumerState<TimekeeperScreen>
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.of(context).pushReplacementNamed('/'),
+            onTap: () => Navigator.of(context).pushReplacementNamed('/home'),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(

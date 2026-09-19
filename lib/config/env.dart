@@ -1,22 +1,59 @@
 /// Environment configuration for Pusaka app.
 /// Manages API base URLs and authentication tokens.
+/// Supports runtime switching between Online and Offline (LAN) modes.
 class Env {
-  // ── Strapi Backend URLs ──
-  static const String _defaultUrl = 'https://be.pusakarinjani.my.id';
+  Env._();
 
-  static const String apiBaseUrl = String.fromEnvironment(
+  // ── Mode ──
+  static bool _isOffline = false;
+  static bool get isOffline => _isOffline;
+
+  // ── Backend URLs ──
+  static const String _onlineUrl = 'https://be.pusakarinjani.my.id';
+  static const String _offlineUrl = 'http://be-local.pusakarinjani.my.id';
+
+  // ── Compile-time override (still supported via --dart-define) ──
+  static const String _envOverrideUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: _defaultUrl,
+    defaultValue: '',
   );
+
+  /// Current active API Base URL (without /api suffix).
+  /// Determined by mode selection or compile-time override.
+  static String get apiBaseUrl {
+    if (_envOverrideUrl.isNotEmpty) return _envOverrideUrl;
+    return _isOffline ? _offlineUrl : _onlineUrl;
+  }
 
   /// Full API URL (Strapi REST endpoint)
-  static const String apiUrl = '$apiBaseUrl/api';
+  static String get apiUrl => '$apiBaseUrl/api';
 
-  /// Static protection token for API calls without user login.
-  /// Updated to authorization token for be.pusakarinjani.my.id
-  static const String tokenProtect = String.fromEnvironment(
-    'TOKEN_PROTECT',
-    defaultValue:
-        'be06a16908020950f47afa5c5a8bef1b83682d9309cf2a73702348212037020490b45f84f727a4395dc6638f0845f9bb4b7ca53cb3f3c98f8beb97a022ccf3c9237c6dbd1515c4c8a0bd806527465ed91775f879b23fbbc28fd7381326bedd742cba5d7f7e53b10d7c7ec2a6b7c9f827eba90151fe5ccb59878080349e6ffa79',
-  );
+  // ── Authentication Tokens ──
+  static const String _onlineTokenDefault =
+      '544af768f8e7879cd3d0e912a31bed604ca787a4f045c5d2b4433dfd5098c8f4b929df9e70280f855ba96120b679afae5d890cd2ade192e0a653908e0aca179ec8410fefaeacb3dacedb7040471f59790c92302c10f7e9d86e58f9913a955f4a79ca6c8bee9e3808ccfff0321985dfa2041e5850baf0d8d2c13459d81e173f6e';
+
+  static String _offlineToken = '';
+  static String get offlineToken => _offlineToken;
+
+  /// Dynamic protection token for API calls.
+  /// Uses the online token when in online mode, or the custom entered/scanned token in offline mode.
+  static String get tokenProtect {
+    if (_isOffline) {
+      return _offlineToken;
+    }
+    const envToken = String.fromEnvironment('TOKEN_PROTECT', defaultValue: '');
+    if (envToken.isNotEmpty) return envToken;
+    return _onlineTokenDefault;
+  }
+
+  /// Switch to Online mode
+  static void setOnline() {
+    _isOffline = false;
+  }
+
+  /// Switch to Offline / LAN mode with custom token
+  static void setOffline({required String token}) {
+    _isOffline = true;
+    _offlineToken = token.trim();
+  }
 }
