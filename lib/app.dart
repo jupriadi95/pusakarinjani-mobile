@@ -8,6 +8,8 @@ import 'screens/juri/juri_screen.dart';
 import 'screens/monitor/monitor_screen.dart';
 import 'screens/timekeeper/timekeeper_screen.dart';
 
+import 'widgets/fullscreen_toggle_button.dart';
+
 /// Root application widget with routing configuration.
 class PusakaApp extends StatelessWidget {
   const PusakaApp({super.key});
@@ -20,6 +22,20 @@ class PusakaApp extends StatelessWidget {
       theme: PusakaTheme.darkTheme,
       initialRoute: '/',
       onGenerateRoute: _onGenerateRoute,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            ?child,
+            const Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: FullscreenToggleButton(),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

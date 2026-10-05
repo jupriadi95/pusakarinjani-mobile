@@ -10,6 +10,8 @@ jobs:
   build-windows:
     name: Build Windows Application
     runs-on: windows-latest
+    permissions:
+      contents: write
     env:
       CL: "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"
 
@@ -32,8 +34,27 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release
 
-      - name: Upload Pusaka Rinjani Windows
+      - name: Compress Release Folder
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "Pusaka-Rinjani-Windows.zip" -Force
+
+      - name: Upload Pusaka Rinjani Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Pusaka-Rinjani-Windows
           path: build/windows/x64/runner/Release
+
+      - name: Publish/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Pusaka Rinjani - Latest Release"
+          body: |
+            Build otomatis terbaru dari branch `master`.
+            Tanggal build: ${{ github.event.head_commit.timestamp || 'N/A' }}
+            Commit: ${{ github.sha }}
+          files: Pusaka-Rinjani-Windows.zip
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,12 +1,17 @@
 name: Build Pusaka Rinjani Android APK
 
 on:
-  workflow_dispatch: # Hanya dijalankan secara manual dari tab Actions di GitHub
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
   build-android:
     name: Build Android APK (Release)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout source code
@@ -31,9 +36,26 @@ jobs:
       - name: Build Android APK Release
         run: flutter build apk --release
 
-      - name: Upload Pusaka Rinjani Android APK
+      - name: Copy Renamed APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk Pusaka-Rinjani-Android.apk
+
+      - name: Upload Pusaka Rinjani Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Pusaka-Rinjani-Android-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Publish/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Pusaka Rinjani - Latest Release"
+          body: |
+            Build otomatis terbaru dari branch `master`.
+            Tanggal build: ${{ github.event.head_commit.timestamp || 'N/A' }}
+            Commit: ${{ github.sha }}
+          files: Pusaka-Rinjani-Android.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
