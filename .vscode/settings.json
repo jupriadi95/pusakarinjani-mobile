@@ -1,7 +1,3 @@
 {
-  "java.configuration.updateBuildConfiguration": "interactive",
-  "dart.flutterAdditionalArgs": [
-    "--web-port=1922",
-    "--web-hostname=0.0.0.0"
-  ]
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

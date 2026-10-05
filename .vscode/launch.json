@@ -2,19 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Pusaka (Port 1922 - Default)",
+      "name": "Pusaka (Auto Detect / Android / Desktop)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
-      "args": [
-        "--web-port",
-        "1922",
-        "--web-hostname",
-        "0.0.0.0"
-      ]
+      "program": "lib/main.dart"
     },
     {
-      "name": "Pusaka Web (Chrome - Port 1922)",
+      "name": "Pusaka Web (Chrome - Port 1922 & LAN)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
@@ -28,7 +22,7 @@
       ]
     },
     {
-      "name": "Pusaka Web Server (LAN 0.0.0.0:1922)",
+      "name": "Pusaka Web Server (Port 1922 & LAN)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
@@ -40,6 +34,17 @@
         "--web-hostname",
         "0.0.0.0"
       ]
+    },
+    {
+      "name": "Pusaka Android (Target Device)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "android"
+      ]
     }
   ]
 }
+
