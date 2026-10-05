@@ -50,8 +50,16 @@ android {
 
     buildTypes {
         release {
-            // Signing with release keys from key.properties if available, otherwise fallback to debug
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Signing with release keys if key.properties and storeFile exists, otherwise fallback to debug signing
+            val hasValidReleaseKeystore = keystorePropertiesFile.exists() &&
+                    keystoreProperties.getProperty("storeFile") != null &&
+                    keystoreProperties.getProperty("storeFile")?.let { file(it).exists() } == true
+
+            signingConfig = if (hasValidReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
