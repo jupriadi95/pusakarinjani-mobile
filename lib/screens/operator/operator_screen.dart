@@ -110,8 +110,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         _startTimer();
       }
 
-      // Fetch jadwal
-      ref.read(jadwalListProvider.notifier).fetchJadwal(gelanggang);
+      // Fetch jadwal — deferred to avoid modifying provider while building
+      Future.microtask(() {
+        if (!mounted) return;
+        ref.read(jadwalListProvider.notifier).fetchJadwal(gelanggang);
+      });
 
       // Connect socket
       _socketService.connect(gelanggangDocumentId: gelanggang.documentId);
@@ -764,7 +767,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
           _selectedJadwal!.documentId!.isNotEmpty) {
         try {
           await _api.updateProtect('jadwals', _selectedJadwal!.documentId!, {
-            'data': {'status_tanding': 'selesai'},
+            'data': {'status': 'selesai'},
           });
         } catch (e) {
           debugPrint('[Dewan] Error updating jadwal status: $e');
@@ -777,7 +780,15 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         _pauseTimer();
       });
 
-      // 4. Emit timer:control stop event so Monitor & Juri screens trigger instantly
+      // 4. Cek apakah skor SERI → Dewan wajib menentukan pemenang
+      final allNilai = ref.read(nilaiListProvider);
+      final statsBiru = computeMatchStats(allNilai, biruId, sudut: 'biru');
+      final statsMerah = computeMatchStats(allNilai, merahId, sudut: 'merah');
+      final skorBiru = countNilaiForPeserta(allNilai, biruId, sudut: 'biru');
+      final skorMerah = countNilaiForPeserta(allNilai, merahId, sudut: 'merah');
+      final isSeri = skorBiru == skorMerah;
+
+      // 5. Emit timer:control stop event so Monitor & Juri screens trigger instantly
       final gelanggangId = ref.read(activeGelanggangProvider)?.documentId ?? '';
       _socketService.emitTimerControl({
         'action': 'stop',
@@ -786,14 +797,315 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'status': 'selesai',
         'atlit1Id': biruId,
         'atlit2Id': merahId,
+        if (isSeri) 'seri': true,
       });
 
-      _showSnack(
-        'Pertandingan Selesai! Pemenang Ditampilkan di Layar Monitor.',
-        PusakaTheme.emerald600,
-      );
+      if (isSeri) {
+        _showSnack(
+          'Skor SERI! Silakan tentukan pemenang.',
+          PusakaTheme.amber500,
+        );
+        await _showSeriDialog(statsBiru, statsMerah);
+      } else {
+        _showSnack(
+          'Pertandingan Selesai! Pemenang Ditampilkan di Layar Monitor.',
+          PusakaTheme.emerald600,
+        );
+      }
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── SKOR SERI: POPUP KEPUTUSAN DEWAN ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Future<void> _showSeriDialog(MatchStats biru, MatchStats merah) async {
+    final biruName = _atlitBiru?.namaLengkap ?? 'Sudut Biru';
+    final merahName = _atlitMerah?.namaLengkap ?? 'Sudut Merah';
+
+    final pemenang = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: PusakaTheme.slate950,
+          insetPadding: const EdgeInsets.all(24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.balance_rounded,
+                    color: Color(0xFFFBBF24),
+                    size: 40,
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'SKOR SERI — KEPUTUSAN DEWAN',
+                    style: TextStyle(
+                      color: Color(0xFFFBBF24),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Bandingkan statistik kedua peserta lalu pilih pemenang.',
+                    style: TextStyle(color: PusakaTheme.slate400, fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSeriStatsTable(biruName, merahName, biru, merah),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildPilihPemenangButton(
+                          ctx,
+                          label: 'MENANGKAN BIRU',
+                          sudut: 'biru',
+                          color: const Color(0xFF0284C7),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildPilihPemenangButton(
+                          ctx,
+                          label: 'MENANGKAN MERAH',
+                          sudut: 'merah',
+                          color: const Color(0xFFE11D48),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (pemenang != null) {
+      await _handlePilihPemenang(pemenang);
+    }
+  }
+
+  Widget _buildSeriStatsTable(
+    String biruName,
+    String merahName,
+    MatchStats biru,
+    MatchStats merah,
+  ) {
+    Widget headerCell(String text, Color color, {TextAlign? align}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Text(
+            text,
+            textAlign: align ?? TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+            ),
+          ),
+        );
+
+    TableRow statRow(String label, IconData icon, int b, int m,
+        {bool lowerIsBetter = false}) {
+      final biruBetter = lowerIsBetter ? b < m : b > m;
+      final merahBetter = lowerIsBetter ? m < b : m > b;
+      Widget valueCell(int v, bool better, Color color) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              '$v',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: better ? color : Colors.white,
+                fontSize: better ? 24 : 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          );
+      return TableRow(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+        ),
+        children: [
+          valueCell(b, biruBetter, const Color(0xFF38BDF8)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: PusakaTheme.slate400),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: PusakaTheme.slate300,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          valueCell(m, merahBetter, const Color(0xFFFB7185)),
+        ],
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1220),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF1E293B)),
+      ),
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(1),
+          1: FlexColumnWidth(1.1),
+          2: FlexColumnWidth(1),
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          TableRow(
+            children: [
+              headerCell(biruName.toUpperCase(), const Color(0xFF38BDF8)),
+              headerCell('STATISTIK', PusakaTheme.slate400),
+              headerCell(merahName.toUpperCase(), const Color(0xFFFB7185)),
+            ],
+          ),
+          statRow('Nilai', Icons.scoreboard_rounded, biru.nilai, merah.nilai),
+          statRow('Pukulan', Icons.sports_mma_rounded, biru.pukulan,
+              merah.pukulan),
+          statRow('Tendangan', Icons.sports_martial_arts_rounded,
+              biru.tendangan, merah.tendangan),
+          statRow('Jatuhan', Icons.verified_user_rounded, biru.jatuhan,
+              merah.jatuhan),
+          statRow('Pelanggaran', Icons.warning_amber_rounded, biru.pelanggaran,
+              merah.pelanggaran,
+              lowerIsBetter: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPilihPemenangButton(
+    BuildContext dialogCtx, {
+    required String label,
+    required String sudut,
+    required Color color,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: () async {
+        final nama = sudut == 'biru'
+            ? (_atlitBiru?.namaLengkap ?? 'Sudut Biru')
+            : (_atlitMerah?.namaLengkap ?? 'Sudut Merah');
+        final ok = await showDialog<bool>(
+          context: dialogCtx,
+          builder: (c) => AlertDialog(
+            backgroundColor: PusakaTheme.slate900,
+            title: const Text(
+              'Konfirmasi Pemenang',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+            content: Text(
+              'Tetapkan $nama (SUDUT ${sudut.toUpperCase()}) sebagai pemenang?',
+              style: const TextStyle(color: PusakaTheme.slate300),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text(
+                  'Batal',
+                  style: TextStyle(color: PusakaTheme.slate400),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(c, true),
+                style: ElevatedButton.styleFrom(backgroundColor: color),
+                child: const Text(
+                  'Ya, Tetapkan',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (ok == true && dialogCtx.mounted) {
+          Navigator.of(dialogCtx).pop(sudut);
+        }
+      },
+      icon: const Icon(Icons.emoji_events_rounded, color: Colors.white),
+      label: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.8,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  /// Broadcast keputusan Dewan (pemenang saat skor seri) ke Monitor & simpan ke Strapi.
+  Future<void> _handlePilihPemenang(String sudut) async {
+    final gelanggangId = ref.read(activeGelanggangProvider)?.documentId ?? '';
+    final jadwalDocId = _selectedJadwal?.documentId ?? '';
+    final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
+    final merahId =
+        _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final pemenangId = sudut == 'biru' ? biruId : merahId;
+
+    _socketService.emitPertandinganSelesai({
+      'gelanggangId': gelanggangId,
+      'jadwalId': jadwalDocId,
+      'pemenang': sudut,
+      'kemenangan': 'keputusan_dewan',
+    });
+    // Backup channel agar Monitor pasti menerima keputusan
+    _socketService.emitTimerControl({
+      'action': 'stop',
+      'seconds': _timerSeconds,
+      'gelanggangId': gelanggangId,
+      'status': 'selesai',
+      'atlit1Id': biruId,
+      'atlit2Id': merahId,
+      'pemenang': sudut,
+      'kemenangan': 'keputusan_dewan',
+    });
+
+    if (jadwalDocId.isNotEmpty && pemenangId.isNotEmpty) {
+      try {
+        await _api.updateProtect('jadwals', jadwalDocId, {
+          'data': {'pemenang': pemenangId},
+        });
+      } catch (e) {
+        debugPrint('[Dewan] Error saving pemenang to Strapi: $e');
+      }
+    }
+
+    _showSnack(
+      'Pemenang: SUDUT ${sudut.toUpperCase()} (Keputusan Dewan) ditampilkan di Monitor.',
+      PusakaTheme.emerald600,
+    );
+  }
+
 
   /// Emit KP Action via Socket.IO AND Persist Directly to Strapi Database
   DateTime? _lastKpActionTime;

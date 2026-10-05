@@ -7,6 +7,7 @@ import '../../models/jadwal.dart';
 import '../../models/media.dart';
 import '../../models/nilai.dart';
 import '../../models/peserta.dart';
+import '../../models/sponsor.dart';
 import '../../providers/gelanggang_provider.dart';
 import '../../providers/jadwal_provider.dart';
 import '../../providers/nilai_provider.dart';
@@ -68,10 +69,16 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   bool _showWinnerModal = false;
   String? _liveBabakOverride;
 
+  // ── Keputusan Dewan saat skor SERI ('biru' | 'merah') ──
+  String? _dewanPemenang;
+
   // ── Disqualification State ──
   String? _dsqSudut; // 'biru' | 'merah'
   String? _dsqNama;
   String? _dsqMessage;
+
+  // ── Sponsors (for standby showcase) ──
+  List<Sponsor> _sponsors = [];
 
   StreamSubscription? _connectionSub;
   StreamSubscription? _gelanggangSub;
@@ -107,7 +114,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     _gelanggang = ref.read(activeGelanggangProvider);
 
     if (_gelanggang != null) {
-      ref.read(jadwalListProvider.notifier).fetchJadwal(_gelanggang!);
+      // Defer provider modifications so they run AFTER initState completes.
+      // This prevents the Riverpod "modify provider while building" error.
+      Future.microtask(() {
+        if (!mounted) return;
+        ref.read(jadwalListProvider.notifier).fetchJadwal(_gelanggang!);
+      });
 
       if (_gelanggang!.atlit1Id != null && _gelanggang!.atlit1Id!.isNotEmpty) {
         _fetchPeserta(_gelanggang!.atlit1Id!, 1);
@@ -116,6 +128,12 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _fetchPeserta(_gelanggang!.atlit2Id!, 2);
       }
       _fetchNilai();
+
+      // Fetch sponsors for standby showcase
+      final eventDocId = _gelanggang!.event?.documentId;
+      if (eventDocId != null && eventDocId.isNotEmpty) {
+        _fetchSponsors(eventDocId);
+      }
 
       if (_gelanggang!.isBerlangsung) {
         _startTimer();
@@ -147,6 +165,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           ref.read(nilaiListProvider.notifier).clear();
           setState(() {
             _showWinnerModal = false;
+            _dewanPemenang = null;
             _dsqSudut = null;
             _dsqNama = null;
             _dsqMessage = null;
@@ -164,6 +183,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         if (isPartaiBaru && _showWinnerModal) {
           setState(() {
             _showWinnerModal = false;
+            _dewanPemenang = null;
           });
         }
 
@@ -454,6 +474,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       final seconds = data['seconds'] as int?;
       final dsqSudut = data['dsqSudut']?.toString().toLowerCase();
       final dsqNama = data['dsqNama']?.toString();
+      final pemenang = data['pemenang']?.toString().toLowerCase();
 
       setState(() {
         if (seconds != null) {
@@ -463,17 +484,22 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _dsqSudut = dsqSudut;
           _dsqNama = dsqNama;
         }
+        if (pemenang == 'biru' || pemenang == 'merah') {
+          _dewanPemenang = pemenang;
+        }
         if (action == 'pause') {
           _pauseTimer();
         } else if (action == 'resume' || action == 'start') {
           _startTimer();
           _showWinnerModal = false;
+          _dewanPemenang = null;
           _dsqSudut = null;
           _dsqNama = null;
         } else if (action == 'reset') {
           _pauseTimer();
           _timerSeconds = 0;
           _showWinnerModal = false;
+          _dewanPemenang = null;
           _dsqSudut = null;
           _dsqNama = null;
           _kpBinaanBiru = 0;
@@ -514,10 +540,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       if (!mounted) return;
       final dsqSudut = data['dsqSudut']?.toString().toLowerCase();
       final dsqNama = data['dsqNama']?.toString();
+      final pemenang = data['pemenang']?.toString().toLowerCase();
       setState(() {
         if (dsqSudut != null && dsqSudut.isNotEmpty) {
           _dsqSudut = dsqSudut;
           _dsqNama = dsqNama;
+        }
+        if (pemenang == 'biru' || pemenang == 'merah') {
+          _dewanPemenang = pemenang;
         }
         _pauseTimer();
         _showWinnerModal = true;
@@ -575,6 +605,19 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       }
     } catch (e) {
       debugPrint('Monitor fetchPeserta error: $e');
+    }
+  }
+
+  Future<void> _fetchSponsors(String eventDocumentId) async {
+    try {
+      final list = await _api.fetchSponsorsByEvent(eventDocumentId);
+      final parsed = list
+          .whereType<Map<String, dynamic>>()
+          .map(Sponsor.fromJson)
+          .toList();
+      if (mounted) setState(() => _sponsors = parsed);
+    } catch (e) {
+      debugPrint('Monitor fetchSponsors error: $e');
     }
   }
 
@@ -670,6 +713,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               eventInfo: _gelanggang?.event,
               gelanggangInfo: _gelanggang,
               isLargeDisplay: true,
+              sponsors: _sponsors,
             ),
 
             // Top bar with Back Button & Arena info
@@ -2679,12 +2723,254 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // ── 5a. SKOR SERI — PERBANDINGAN STATISTIK (MENUNGGU KEPUTUSAN DEWAN) ──
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSeriStatsModal() {
+    final nilaiList = ref.watch(nilaiListProvider);
+    final a1Id =
+        _atlit1?.documentId ?? _atlit1?.id?.toString() ?? _gelanggang?.atlit1Id ?? '';
+    final a2Id =
+        _atlit2?.documentId ?? _atlit2?.id?.toString() ?? _gelanggang?.atlit2Id ?? '';
+    final biru = computeMatchStats(nilaiList, a1Id, sudut: 'biru');
+    final merah = computeMatchStats(nilaiList, a2Id, sudut: 'merah');
+
+    const biruColor = Color(0xFF38BDF8);
+    const merahColor = Color(0xFFFB7185);
+    const gold = Color(0xFFFBBF24);
+
+    Widget athleteHeader(Peserta? atlit, bool isRed) {
+      final color = isRed ? merahColor : biruColor;
+      return Column(
+        children: [
+          Text(
+            isRed ? 'SUDUT MERAH' : 'SUDUT BIRU',
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            (atlit?.namaLengkap ?? '-').toUpperCase(),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            (atlit?.kontingen ?? '-').toUpperCase(),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.85),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget statRow(String label, IconData icon, int b, int m,
+        {bool lowerIsBetter = false}) {
+      final biruBetter = lowerIsBetter ? b < m : b > m;
+      final merahBetter = lowerIsBetter ? m < b : m > b;
+
+      Widget value(int v, bool better, Color color) => Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: better
+                    ? color.withValues(alpha: 0.18)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: better
+                      ? color.withValues(alpha: 0.7)
+                      : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                '$v',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: better ? color : Colors.white,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          );
+
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+        ),
+        child: Row(
+          children: [
+            value(b, biruBetter, biruColor),
+            SizedBox(
+              width: 220,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: const Color(0xFF94A3B8), size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    label.toUpperCase(),
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            value(m, merahBetter, merahColor),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.92),
+      child: Center(
+        child: Container(
+          width: 900,
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+          decoration: BoxDecoration(
+            color: const Color(0xFF090D16),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: gold, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: gold.withValues(alpha: 0.35),
+                blurRadius: 40,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.balance_rounded, color: gold, size: 44),
+                const SizedBox(height: 4),
+                const Text(
+                  'SKOR SERI',
+                  style: TextStyle(
+                    color: gold,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF78350F).withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'MENUNGGU KEPUTUSAN DEWAN PERTANDINGAN',
+                    style: TextStyle(
+                      color: Color(0xFFFDE68A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: athleteHeader(_atlit1, false)),
+                    const SizedBox(
+                      width: 220,
+                      child: Center(
+                        child: Text(
+                          'VS',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: athleteHeader(_atlit2, true)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B1220),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF1E293B)),
+                  ),
+                  child: Column(
+                    children: [
+                      statRow('Nilai', Icons.scoreboard_rounded, biru.nilai,
+                          merah.nilai),
+                      statRow('Pukulan', Icons.sports_mma_rounded,
+                          biru.pukulan, merah.pukulan),
+                      statRow('Tendangan', Icons.sports_martial_arts_rounded,
+                          biru.tendangan, merah.tendangan),
+                      statRow('Jatuhan', Icons.verified_user_rounded,
+                          biru.jatuhan, merah.jatuhan),
+                      statRow('Pelanggaran', Icons.warning_amber_rounded,
+                          biru.pelanggaran, merah.pelanggaran,
+                          lowerIsBetter: true),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // ── 5. WINNER CELEBRATION MODAL (AKHIR PERTANDINGAN) ──
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildWinnerModal(int biruScore, int merahScore) {
     final isDsq = _dsqSudut != null && _dsqSudut!.isNotEmpty;
-    final isBiruWin = isDsq ? (_dsqSudut == 'merah') : (biruScore > merahScore);
-    final isMerahWin = isDsq ? (_dsqSudut == 'biru') : (merahScore > biruScore);
+    final isDewanDecision =
+        !isDsq && biruScore == merahScore && _dewanPemenang != null;
+
+    // Skor seri & Dewan belum memutuskan → tampilkan perbandingan statistik
+    if (!isDsq && biruScore == merahScore && _dewanPemenang == null) {
+      return _buildSeriStatsModal();
+    }
+
+    final isBiruWin = isDsq
+        ? (_dsqSudut == 'merah')
+        : isDewanDecision
+        ? _dewanPemenang == 'biru'
+        : (biruScore > merahScore);
+    final isMerahWin = isDsq
+        ? (_dsqSudut == 'biru')
+        : isDewanDecision
+        ? _dewanPemenang == 'merah'
+        : (merahScore > biruScore);
 
     final winnerColor = isBiruWin
         ? const Color(0xFF0284C7)
@@ -2802,6 +3088,30 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                   letterSpacing: 1.0,
                 ),
               ),
+
+              if (isDewanDecision) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF78350F).withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFFBBF24)),
+                  ),
+                  child: const Text(
+                    'SKOR SERI • KEPUTUSAN DEWAN PERTANDINGAN',
+                    style: TextStyle(
+                      color: Color(0xFFFDE68A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+              ],
 
               if (isDsq) ...[
                 const SizedBox(height: 8),

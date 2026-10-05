@@ -133,7 +133,11 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     _gelanggang = ref.read(activeGelanggangProvider);
 
     if (_gelanggang != null) {
-      ref.read(jadwalListProvider.notifier).fetchJadwal(_gelanggang!);
+      // Defer to avoid modifying provider while widget tree is building
+      Future.microtask(() {
+        if (!mounted) return;
+        ref.read(jadwalListProvider.notifier).fetchJadwal(_gelanggang!);
+      });
 
       if (_gelanggang!.isBerlangsung) {
         _fetchPeserta(_gelanggang!.atlit1Id ?? '', 1);

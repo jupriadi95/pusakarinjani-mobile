@@ -330,3 +330,84 @@ List<Nilai> recentNilaiForPeserta(
   });
   return filtered.take(limit).toList();
 }
+
+/// Rekap statistik pertandingan per peserta — dipakai saat skor SERI
+/// agar Dewan dapat menentukan pemenang berdasarkan perbandingan teknik.
+class MatchStats {
+  final int nilai;
+  final int pukulan;
+  final int tendangan;
+  final int jatuhan;
+  final int pelanggaran;
+
+  const MatchStats({
+    this.nilai = 0,
+    this.pukulan = 0,
+    this.tendangan = 0,
+    this.jatuhan = 0,
+    this.pelanggaran = 0,
+  });
+}
+
+/// Computed: Rekap jumlah nilai, pukulan, tendangan, jatuhan, dan pelanggaran
+/// (teguran + peringatan) untuk satu peserta. Pembatalan (batal_*) mengurangi hitungan.
+MatchStats computeMatchStats(
+  List<Nilai> allNilai,
+  String pesertaDocId, {
+  String? sudut,
+}) {
+  if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) {
+    return const MatchStats();
+  }
+
+  int nilai = 0, pukulan = 0, tendangan = 0, jatuhan = 0, pelanggaran = 0;
+
+  for (final n in allNilai) {
+    if (!n.isSah) continue;
+    final doc = n.peserta?.documentId;
+    final id = n.peserta?.id?.toString();
+    final matchesId = pesertaDocId.isNotEmpty &&
+        ((doc != null && doc == pesertaDocId) ||
+            (id != null && id == pesertaDocId));
+    final matchesSudut = (sudut != null &&
+        sudut.isNotEmpty &&
+        n.sudut?.toLowerCase() == sudut.toLowerCase());
+    if (!matchesId && !matchesSudut) continue;
+
+    final jenis = (n.jenis ?? '').toLowerCase();
+    final jumlah = n.jumlah ?? 0;
+    nilai += jumlah;
+
+    if (jenis == 'pukulan') {
+      pukulan++;
+    } else if (jenis == 'tendangan') {
+      tendangan++;
+    } else if (jenis == 'batal_jatuhan') {
+      jatuhan--;
+    } else if (jenis == 'jatuhan') {
+      jumlah < 0 ? jatuhan-- : jatuhan++;
+    } else if (jenis == 'teguran' ||
+        jenis == 'pembinaan' ||
+        jenis == 'peringatan') {
+      // Nilai negatif = sanksi diberikan, positif = pembatalan sanksi
+      jumlah > 0 ? pelanggaran-- : pelanggaran++;
+    } else if (jenis == 'batal_teguran' ||
+        jenis == 'batal_pembinaan' ||
+        jenis == 'batal_peringatan') {
+      pelanggaran--;
+    } else if (jenis.isEmpty) {
+      // Fallback untuk data lama tanpa jenis
+      if (jumlah == 1) pukulan++;
+      if (jumlah == 2) tendangan++;
+      if (jumlah == 3) jatuhan++;
+    }
+  }
+
+  return MatchStats(
+    nilai: nilai,
+    pukulan: pukulan < 0 ? 0 : pukulan,
+    tendangan: tendangan < 0 ? 0 : tendangan,
+    jatuhan: jatuhan < 0 ? 0 : jatuhan,
+    pelanggaran: pelanggaran < 0 ? 0 : pelanggaran,
+  );
+}
