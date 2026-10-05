@@ -554,6 +554,8 @@ class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
                       prompt: 'Arahkan kamera ke QR Code Token Offline',
                       onScanned: (scannedCode) {
                         Navigator.of(dialogCtx).pop();
+                        // Guard: widget might be disposed if navigation happened
+                        if (!mounted) return;
                         setState(() {
                           _tokenController.text = scannedCode.trim();
                           _errorMessage = null;

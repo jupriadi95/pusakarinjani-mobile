@@ -101,6 +101,28 @@ class ApiService {
 
   // ── Custom endpoints ──
 
+  /// Fetch sponsors for a given event.
+  /// GET /sponsors?filters[event][documentId][$eq]=<eventId>&populate=logo
+  Future<List<dynamic>> fetchSponsorsByEvent(String eventDocumentId) async {
+    try {
+      final response = await _dio.get(
+        '/sponsors',
+        queryParameters: {
+          'filters[event][documentId][\$eq]': eventDocumentId,
+          'populate': 'logo',
+          'pagination[pageSize]': 100,
+        },
+        options: Options(headers: _protectHeaders),
+      );
+      final data = response.data;
+      if (data is List) return data;
+      if (data is Map && data['data'] is List) return data['data'] as List;
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   /// Fetch jadwal by event ID using custom backend endpoint.
   /// GET /jadwal/event/:eventId
   Future<List<dynamic>> fetchJadwalByEvent(String eventId) async {
