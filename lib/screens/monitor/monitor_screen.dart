@@ -707,114 +707,91 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     // STATE 2: STANDBY
     if (_gelanggang?.statusTanding != 'berlangsung' && !_showWinnerModal) {
       return Scaffold(
-        body: Stack(
-          children: [
-            StandbyScreen(
-              eventInfo: _gelanggang?.event,
-              gelanggangInfo: _gelanggang,
-              isLargeDisplay: true,
-              sponsors: _sponsors,
-            ),
-
-            // Top bar with Back Button & Arena info
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pushReplacementNamed('/home');
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF0F172A,
-                          ).withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(
-                              Icons.arrow_back,
-                              color: Color(0xFF94A3B8),
-                              size: 16,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Kembali ke Portal',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+        body: StandbyScreen(
+          eventInfo: _gelanggang?.event,
+          gelanggangInfo: _gelanggang,
+          isLargeDisplay: true,
+          sponsors: _sponsors,
+          leadingAction: GestureDetector(
+            onTap: () {
+              Navigator.of(context).pushReplacementNamed('/home');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.arrow_back,
+                    color: Color(0xFF94A3B8),
+                    size: 16,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Kembali ke Portal',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
-
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            (_isConnected
-                                    ? const Color(0xFF065F46)
-                                    : const Color(0xFF881337))
-                                .withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _isConnected
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFE11D48),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _isConnected
-                                  ? const Color(0xFF34D399)
-                                  : const Color(0xFFFB7185),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _isConnected ? 'TERHUBUNG KE ARENA' : 'OFFLINE',
-                            style: TextStyle(
-                              color: _isConnected
-                                  ? const Color(0xFF34D399)
-                                  : const Color(0xFFFB7185),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+          trailingAction: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: (_isConnected
+                      ? const Color(0xFF065F46)
+                      : const Color(0xFF881337))
+                  .withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isConnected
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFE11D48),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isConnected
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFFFB7185),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _isConnected ? 'TERHUBUNG KE ARENA' : 'OFFLINE',
+                  style: TextStyle(
+                    color: _isConnected
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFFFB7185),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -2786,7 +2763,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       Widget value(int v, bool better, Color color) => Expanded(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               decoration: BoxDecoration(
                 color: better
                     ? color.withValues(alpha: 0.18)
@@ -2804,7 +2781,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: better ? color : Colors.white,
-                  fontSize: 40,
+                  fontSize: 34,
                   fontWeight: FontWeight.w900,
                   height: 1.1,
                 ),
@@ -2934,8 +2911,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                           biru.tendangan, merah.tendangan),
                       statRow('Jatuhan', Icons.verified_user_rounded,
                           biru.jatuhan, merah.jatuhan),
-                      statRow('Pelanggaran', Icons.warning_amber_rounded,
-                          biru.pelanggaran, merah.pelanggaran,
+                      statRow('Binaan', Icons.info_outline_rounded,
+                          biru.binaan, merah.binaan,
+                          lowerIsBetter: true),
+                      statRow('Teguran', Icons.warning_amber_rounded,
+                          biru.teguran, merah.teguran,
+                          lowerIsBetter: true),
+                      statRow('Peringatan', Icons.gpp_maybe_rounded,
+                          biru.peringatan, merah.peringatan,
                           lowerIsBetter: true),
                     ],
                   ),

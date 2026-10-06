@@ -15,6 +15,8 @@ class StandbyScreen extends StatelessWidget {
   final Gelanggang? gelanggangInfo;
   final bool? isLargeDisplay;
   final List<Sponsor> sponsors;
+  final Widget? leadingAction;
+  final Widget? trailingAction;
 
   const StandbyScreen({
     super.key,
@@ -22,6 +24,8 @@ class StandbyScreen extends StatelessWidget {
     this.gelanggangInfo,
     this.isLargeDisplay,
     this.sponsors = const [],
+    this.leadingAction,
+    this.trailingAction,
   });
 
   @override
@@ -68,13 +72,15 @@ class StandbyScreen extends StatelessWidget {
           // ── Main Content ──
           Column(
             children: [
-              // TOP HEADER — IPSI logo + event name + gelanggang badge
+              // TOP HEADER — IPSI logo + event name + gelanggang badge + actions
               SafeArea(
                 bottom: false,
                 child: _TopHeader(
                   eventInfo: eventInfo,
                   gelanggangInfo: gelanggangInfo,
                   isLarge: isLarge,
+                  leadingAction: leadingAction,
+                  trailingAction: trailingAction,
                 ),
               ),
 
@@ -113,22 +119,37 @@ class _TopHeader extends StatelessWidget {
   final Event? eventInfo;
   final Gelanggang? gelanggangInfo;
   final bool isLarge;
-  const _TopHeader({this.eventInfo, this.gelanggangInfo, required this.isLarge});
+  final Widget? leadingAction;
+  final Widget? trailingAction;
+
+  const _TopHeader({
+    this.eventInfo,
+    this.gelanggangInfo,
+    required this.isLarge,
+    this.leadingAction,
+    this.trailingAction,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: isLarge ? 36 : 20,
-        vertical: isLarge ? 18 : 12,
+        horizontal: isLarge ? 28 : 16,
+        vertical: isLarge ? 14 : 10,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // IPSI Logo
+          // ── 1. Leading Action (e.g. Tombol Keluar / Kembali) ──
+          if (leadingAction != null) ...[
+            leadingAction!,
+            SizedBox(width: isLarge ? 14 : 10),
+          ],
+
+          // ── 2. IPSI Logo ──
           Container(
-            width: isLarge ? 72 : 48,
-            height: isLarge ? 72 : 48,
+            width: isLarge ? 64 : 44,
+            height: isLarge ? 64 : 44,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(isLarge ? 16 : 12),
               gradient: const LinearGradient(
@@ -150,22 +171,22 @@ class _TopHeader extends StatelessWidget {
                 color: PusakaTheme.slate950,
                 borderRadius: BorderRadius.circular(isLarge ? 13 : 10),
               ),
-              padding: EdgeInsets.all(isLarge ? 8 : 5),
+              padding: EdgeInsets.all(isLarge ? 7 : 4),
               child: Image.asset(
                 'assets/img/logo_ipsi.webp',
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => Icon(
                   Icons.sports_kabaddi,
                   color: PusakaTheme.amber400,
-                  size: isLarge ? 32 : 22,
+                  size: isLarge ? 30 : 20,
                 ),
               ),
             ),
           ),
 
-          SizedBox(width: isLarge ? 20 : 14),
+          SizedBox(width: isLarge ? 16 : 12),
 
-          // Event name + IPSI label
+          // ── 3. Event name + IPSI label ──
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +198,7 @@ class _TopHeader extends StatelessWidget {
                     color: PusakaTheme.slate400,
                     fontSize: isLarge ? 11 : 9,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: isLarge ? 2.0 : 1.5,
+                    letterSpacing: isLarge ? 2.0 : 1.2,
                   ),
                 ),
                 SizedBox(height: isLarge ? 3 : 2),
@@ -186,9 +207,9 @@ class _TopHeader extends StatelessWidget {
                       'KEJUARAAN PENCAK SILAT DIGITAL',
                   style: TextStyle(
                     color: PusakaTheme.amber400,
-                    fontSize: isLarge ? 20 : 13,
+                    fontSize: isLarge ? 18 : 13,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: isLarge ? 1.5 : 1.0,
+                    letterSpacing: isLarge ? 1.2 : 0.8,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -197,30 +218,42 @@ class _TopHeader extends StatelessWidget {
             ),
           ),
 
-          SizedBox(width: isLarge ? 16 : 12),
+          SizedBox(width: isLarge ? 14 : 10),
 
-          // Gelanggang badge
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isLarge ? 20 : 14,
-              vertical: isLarge ? 10 : 7,
-            ),
-            decoration: BoxDecoration(
-              color: PusakaTheme.indigo950.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: PusakaTheme.indigo700.withValues(alpha: 0.8),
+          // ── 4. Right side: Gelanggang badge + Trailing Action (Juri badge, Connection status) ──
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Gelanggang badge
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isLarge ? 18 : 12,
+                  vertical: isLarge ? 8 : 6,
+                ),
+                decoration: BoxDecoration(
+                  color: PusakaTheme.indigo950.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: PusakaTheme.indigo700.withValues(alpha: 0.8),
+                  ),
+                ),
+                child: Text(
+                  'GELANGGANG ${gelanggangInfo?.kodeGelanggang ?? '-'}',
+                  style: TextStyle(
+                    color: PusakaTheme.indigo300,
+                    fontSize: isLarge ? 14 : 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                  ),
+                ),
               ),
-            ),
-            child: Text(
-              'GELANGGANG ${gelanggangInfo?.kodeGelanggang ?? '-'}',
-              style: TextStyle(
-                color: PusakaTheme.indigo300,
-                fontSize: isLarge ? 15 : 11,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2,
-              ),
-            ),
+
+              // Trailing action (Juri Selector, Connection status, etc.)
+              if (trailingAction != null) ...[
+                SizedBox(width: isLarge ? 10 : 8),
+                trailingAction!,
+              ],
+            ],
           ),
         ],
       ),

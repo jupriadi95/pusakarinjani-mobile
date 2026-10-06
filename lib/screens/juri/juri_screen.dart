@@ -963,60 +963,49 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             eventInfo: _gelanggang?.event,
             gelanggangInfo: _gelanggang,
             isLargeDisplay: false,
-          ),
-
-          // Header with back button, Juri selector, and connection badge
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      if (_isJuriReady) _setJuriReady(false);
-                      Navigator.of(context).pushReplacementNamed('/home');
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: PusakaTheme.slate900.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: PusakaTheme.slate800),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.arrow_back,
-                            color: PusakaTheme.slate400,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Keluar',
-                            style: TextStyle(
-                              color: PusakaTheme.slate300,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+            leadingAction: GestureDetector(
+              onTap: () {
+                if (_isJuriReady) _setJuriReady(false);
+                Navigator.of(context).pushReplacementNamed('/home');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: PusakaTheme.slate900.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: PusakaTheme.slate700),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_back,
+                      color: PusakaTheme.slate300,
+                      size: 15,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Keluar',
+                      style: TextStyle(
+                        color: PusakaTheme.slate200,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      _buildJuriBadgeButton(),
-                      const SizedBox(width: 8),
-                      ConnectionBadge(isConnected: _isConnected),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
+            ),
+            trailingAction: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildJuriBadgeButton(),
+                const SizedBox(width: 6),
+                ConnectionBadge(isConnected: _isConnected),
+              ],
             ),
           ),
 
@@ -1596,99 +1585,100 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Header: Corner Name + Athlete Info ──
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: borderColor.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      child: Text(
-                        isRed ? 'SUDUT MERAH' : 'SUDUT BIRU',
-                        style: TextStyle(
-                          color: isRed
-                              ? const Color(0xFFFB7185)
-                              : const Color(0xFF38BDF8),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2.5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        atlitLabel,
-                        style: TextStyle(
-                          color: isRed
-                              ? const Color(0xFFFECDD3)
-                              : const Color(0xFFBAE6FD),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 6),
-
-                // ── Athlete Bar (Name + Contingent) ──
+                // ── Header: ATLIT 1/2 + Nama Atlit & Perguruan (Menggantikan Sudut Merah/Biru & kotak atlet bawah) ──
                 Container(
-                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
+                    horizontal: 10,
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: Colors.black.withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: borderColor.withValues(alpha: 0.6),
+                      width: 1.2,
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      Text(
-                        atlit?.namaLengkap?.toUpperCase() ?? 'BELUM ADA ATLET',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
+                      // Badge ATLIT 1 / ATLIT 2
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        atlit?.kontingen?.toUpperCase() ?? 'KONTINGEN -',
-                        style: TextStyle(
+                        decoration: BoxDecoration(
                           color: isRed
-                              ? const Color(0xFFFECDD3)
-                              : const Color(0xFFBAE6FD),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+                              ? const Color(0xFF9F1239)
+                              : const Color(0xFF0369A1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: borderColor.withValues(alpha: 0.8),
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Text(
+                          atlitLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Nama Atlit & Perguruan / Kontingen
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                atlit?.namaLengkap?.toUpperCase() ??
+                                    'BELUM ADA ATLET',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (atlit?.kontingen != null &&
+                                atlit!.kontingen!.isNotEmpty) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6),
+                                child: Text(
+                                  '•',
+                                  style: TextStyle(
+                                    color: isRed
+                                        ? const Color(0xFFFECDD3)
+                                        : const Color(0xFFBAE6FD),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              Flexible(
+                                child: Text(
+                                  atlit.kontingen!.toUpperCase(),
+                                  style: TextStyle(
+                                    color: isRed
+                                        ? const Color(0xFFFECDD3)
+                                        : const Color(0xFFBAE6FD),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1700,10 +1690,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                 Expanded(
                   child: Column(
                     children: [
-                      // 1. PUKULAN (+1)
+                      // 1. PUKULAN
                       _buildJuriScoreTile(
                         label: 'PUKULAN',
-                        poinBadge: '+1',
                         icon: Icons.sports_mma_rounded,
                         isRed: isRed,
                         enabled: atlit != null,
@@ -1717,10 +1706,9 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
 
                       const SizedBox(height: 8),
 
-                      // 2. TENDANGAN (+2)
+                      // 2. TENDANGAN
                       _buildJuriScoreTile(
                         label: 'TENDANGAN',
-                        poinBadge: '+2',
                         icon: Icons.sports_martial_arts_rounded,
                         isRed: isRed,
                         enabled: atlit != null,
@@ -1747,7 +1735,6 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildJuriScoreTile({
     required String label,
-    required String poinBadge,
     required IconData icon,
     required bool isRed,
     required bool enabled,
@@ -1790,8 +1777,8 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
               children: [
                 // Faint decorative watermark icon in background
                 Positioned(
-                  right: -10,
-                  bottom: -15,
+                  right: 15,
+                  bottom: -10,
                   child: Icon(
                     icon,
                     size: 110,
@@ -1799,86 +1786,45 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
                   ),
                 ),
 
-                // Main content
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Left: Icon + Label
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.35),
-                              ),
+                // Main content: Big Icon + Label centered
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              width: 1.5,
                             ),
-                            child: Icon(icon, color: Colors.white, size: 34),
                           ),
-                          const SizedBox(width: 14),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              Text(
-                                isRed ? 'SUDUT MERAH' : 'SUDUT BIRU',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                ),
+                          child: Icon(icon, color: Colors.white, size: 36),
+                        ),
+                        const SizedBox(width: 18),
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black45,
+                                offset: Offset(0, 2),
+                                blurRadius: 4,
                               ),
                             ],
                           ),
-                        ],
-                      ),
-
-                      // Right: Big Point Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 8,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white, width: 2.0),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          poinBadge,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

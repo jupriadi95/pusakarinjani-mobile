@@ -338,19 +338,26 @@ class MatchStats {
   final int pukulan;
   final int tendangan;
   final int jatuhan;
-  final int pelanggaran;
+  final int binaan;
+  final int teguran;
+  final int peringatan;
 
   const MatchStats({
     this.nilai = 0,
     this.pukulan = 0,
     this.tendangan = 0,
     this.jatuhan = 0,
-    this.pelanggaran = 0,
+    this.binaan = 0,
+    this.teguran = 0,
+    this.peringatan = 0,
   });
+
+  /// Total pelanggaran berpoin (teguran + peringatan)
+  int get pelanggaran => teguran + peringatan;
 }
 
-/// Computed: Rekap jumlah nilai, pukulan, tendangan, jatuhan, dan pelanggaran
-/// (teguran + peringatan) untuk satu peserta. Pembatalan (batal_*) mengurangi hitungan.
+/// Computed: Rekap jumlah nilai, pukulan, tendangan, jatuhan, binaan,
+/// teguran, dan peringatan untuk satu peserta. Pembatalan (batal_*) mengurangi hitungan.
 MatchStats computeMatchStats(
   List<Nilai> allNilai,
   String pesertaDocId, {
@@ -360,7 +367,8 @@ MatchStats computeMatchStats(
     return const MatchStats();
   }
 
-  int nilai = 0, pukulan = 0, tendangan = 0, jatuhan = 0, pelanggaran = 0;
+  int nilai = 0, pukulan = 0, tendangan = 0, jatuhan = 0;
+  int binaan = 0, teguran = 0, peringatan = 0;
 
   for (final n in allNilai) {
     if (!n.isSah) continue;
@@ -386,28 +394,38 @@ MatchStats computeMatchStats(
       jatuhan--;
     } else if (jenis == 'jatuhan') {
       jumlah < 0 ? jatuhan-- : jatuhan++;
-    } else if (jenis == 'teguran' ||
-        jenis == 'pembinaan' ||
-        jenis == 'peringatan') {
+    } else if (jenis == 'binaan') {
+      binaan++;
+    } else if (jenis == 'batal_binaan') {
+      binaan--;
+    } else if (jenis == 'teguran') {
       // Nilai negatif = sanksi diberikan, positif = pembatalan sanksi
-      jumlah > 0 ? pelanggaran-- : pelanggaran++;
-    } else if (jenis == 'batal_teguran' ||
-        jenis == 'batal_pembinaan' ||
-        jenis == 'batal_peringatan') {
-      pelanggaran--;
+      jumlah > 0 ? teguran-- : teguran++;
+    } else if (jenis == 'batal_teguran') {
+      teguran--;
+    } else if (jenis == 'pembinaan' || jenis == 'peringatan') {
+      jumlah > 0 ? peringatan-- : peringatan++;
+    } else if (jenis == 'batal_pembinaan' || jenis == 'batal_peringatan') {
+      peringatan--;
     } else if (jenis.isEmpty) {
       // Fallback untuk data lama tanpa jenis
       if (jumlah == 1) pukulan++;
       if (jumlah == 2) tendangan++;
       if (jumlah == 3) jatuhan++;
+      if (jumlah == -1 || jumlah == -2) teguran++;
+      if (jumlah == -5 || jumlah == -10) peringatan++;
     }
   }
 
+  int clamp(int v) => v < 0 ? 0 : v;
+
   return MatchStats(
     nilai: nilai,
-    pukulan: pukulan < 0 ? 0 : pukulan,
-    tendangan: tendangan < 0 ? 0 : tendangan,
-    jatuhan: jatuhan < 0 ? 0 : jatuhan,
-    pelanggaran: pelanggaran < 0 ? 0 : pelanggaran,
+    pukulan: clamp(pukulan),
+    tendangan: clamp(tendangan),
+    jatuhan: clamp(jatuhan),
+    binaan: clamp(binaan),
+    teguran: clamp(teguran),
+    peringatan: clamp(peringatan),
   );
 }
