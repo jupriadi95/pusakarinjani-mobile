@@ -17,6 +17,7 @@ class StandbyScreen extends StatelessWidget {
   final List<Sponsor> sponsors;
   final Widget? leadingAction;
   final Widget? trailingAction;
+  final bool showEventHeader;
 
   const StandbyScreen({
     super.key,
@@ -26,6 +27,7 @@ class StandbyScreen extends StatelessWidget {
     this.sponsors = const [],
     this.leadingAction,
     this.trailingAction,
+    this.showEventHeader = true,
   });
 
   @override
@@ -81,6 +83,7 @@ class StandbyScreen extends StatelessWidget {
                   isLarge: isLarge,
                   leadingAction: leadingAction,
                   trailingAction: trailingAction,
+                  showEventHeader: showEventHeader,
                 ),
               ),
 
@@ -121,6 +124,7 @@ class _TopHeader extends StatelessWidget {
   final bool isLarge;
   final Widget? leadingAction;
   final Widget? trailingAction;
+  final bool showEventHeader;
 
   const _TopHeader({
     this.eventInfo,
@@ -128,6 +132,7 @@ class _TopHeader extends StatelessWidget {
     required this.isLarge,
     this.leadingAction,
     this.trailingAction,
+    this.showEventHeader = true,
   });
 
   @override
@@ -146,79 +151,83 @@ class _TopHeader extends StatelessWidget {
             SizedBox(width: isLarge ? 14 : 10),
           ],
 
-          // ── 2. IPSI Logo ──
-          Container(
-            width: isLarge ? 64 : 44,
-            height: isLarge ? 64 : 44,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(isLarge ? 16 : 12),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [PusakaTheme.indigo600, PusakaTheme.amber500],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: PusakaTheme.indigo500.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(2.5),
-            child: Container(
+          if (showEventHeader) ...[
+            // ── 2. IPSI Logo ──
+            Container(
+              width: isLarge ? 64 : 44,
+              height: isLarge ? 64 : 44,
               decoration: BoxDecoration(
-                color: PusakaTheme.slate950,
-                borderRadius: BorderRadius.circular(isLarge ? 13 : 10),
-              ),
-              padding: EdgeInsets.all(isLarge ? 7 : 4),
-              child: Image.asset(
-                'assets/img/logo_ipsi.webp',
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.sports_kabaddi,
-                  color: PusakaTheme.amber400,
-                  size: isLarge ? 30 : 20,
+                borderRadius: BorderRadius.circular(isLarge ? 16 : 12),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [PusakaTheme.indigo600, PusakaTheme.amber500],
                 ),
-              ),
-            ),
-          ),
-
-          SizedBox(width: isLarge ? 16 : 12),
-
-          // ── 3. Event name + IPSI label ──
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'IKATAN PENCAK SILAT INDONESIA',
-                  style: TextStyle(
-                    color: PusakaTheme.slate400,
-                    fontSize: isLarge ? 11 : 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: isLarge ? 2.0 : 1.2,
+                boxShadow: [
+                  BoxShadow(
+                    color: PusakaTheme.indigo500.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
+                ],
+              ),
+              padding: const EdgeInsets.all(2.5),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: PusakaTheme.slate950,
+                  borderRadius: BorderRadius.circular(isLarge ? 13 : 10),
                 ),
-                SizedBox(height: isLarge ? 3 : 2),
-                Text(
-                  eventInfo?.namaEvent?.toUpperCase() ??
-                      'KEJUARAAN PENCAK SILAT DIGITAL',
-                  style: TextStyle(
+                padding: EdgeInsets.all(isLarge ? 7 : 4),
+                child: Image.asset(
+                  'assets/img/logo_ipsi.webp',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.sports_kabaddi,
                     color: PusakaTheme.amber400,
-                    fontSize: isLarge ? 18 : 13,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: isLarge ? 1.2 : 0.8,
+                    size: isLarge ? 30 : 20,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
+              ),
             ),
-          ),
 
-          SizedBox(width: isLarge ? 14 : 10),
+            SizedBox(width: isLarge ? 16 : 12),
+
+            // ── 3. Event name + IPSI label ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'IKATAN PENCAK SILAT INDONESIA',
+                    style: TextStyle(
+                      color: PusakaTheme.slate400,
+                      fontSize: isLarge ? 11 : 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: isLarge ? 2.0 : 1.2,
+                    ),
+                  ),
+                  SizedBox(height: isLarge ? 3 : 2),
+                  Text(
+                    eventInfo?.namaEvent?.toUpperCase() ??
+                        'KEJUARAAN PENCAK SILAT DIGITAL',
+                    style: TextStyle(
+                      color: PusakaTheme.amber400,
+                      fontSize: isLarge ? 18 : 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: isLarge ? 1.2 : 0.8,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(width: isLarge ? 14 : 10),
+          ] else ...[
+            const Spacer(),
+          ],
 
           // ── 4. Right side: Gelanggang badge + Trailing Action (Juri badge, Connection status) ──
           Row(

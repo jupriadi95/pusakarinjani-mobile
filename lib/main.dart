@@ -16,8 +16,8 @@ void main() async {
 
     const windowOptions = WindowOptions(
       size: Size(1280, 720),
+      minimumSize: Size(960, 540),
       center: true,
-      backgroundColor: Colors.transparent,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.normal,
       title: 'Pusaka — IPSI Digital Scoreboard',
@@ -26,6 +26,9 @@ void main() async {
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
+      // Allow Win32 window message loop to establish normal window rect & state
+      // before switching to fullscreen so restoring bounds is always valid.
+      await Future.delayed(const Duration(milliseconds: 250));
       await windowManager.setFullScreen(true);
     });
   }

@@ -963,6 +963,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
             eventInfo: _gelanggang?.event,
             gelanggangInfo: _gelanggang,
             isLargeDisplay: false,
+            showEventHeader: false,
             leadingAction: GestureDetector(
               onTap: () {
                 if (_isJuriReady) _setJuriReady(false);

@@ -67,18 +67,41 @@ class _FullscreenToggleButtonState extends State<FullscreenToggleButton>
     if (mounted) setState(() => _isFullScreen = false);
   }
 
+  bool _isToggling = false;
+
   Future<void> _toggleFullscreen() async {
-    if (!_isDesktop) return;
+    if (!_isDesktop || _isToggling) return;
+    _isToggling = true;
     try {
       final isFull = await windowManager.isFullScreen();
-      await windowManager.setFullScreen(!isFull);
+      if (isFull) {
+        // Exiting fullscreen mode
+        await windowManager.setFullScreen(false);
+        // Explicitly restore standard window decorations
+        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+
+        // Ensure window has normal, visible, centered bounds (preventing 0x0 collapse on Windows)
+        await windowManager.setSize(const Size(1280, 720));
+        await windowManager.center();
+
+        // Reactivate window and bring to foreground so mouse & keyboard clicks are immediately responsive
+        await windowManager.show();
+        await windowManager.focus();
+      } else {
+        // Entering fullscreen mode
+        await windowManager.setFullScreen(true);
+      }
+
+      final currentFull = await windowManager.isFullScreen();
       if (mounted) {
         setState(() {
-          _isFullScreen = !isFull;
+          _isFullScreen = currentFull;
         });
       }
     } catch (e) {
       debugPrint('Error toggling fullscreen: $e');
+    } finally {
+      _isToggling = false;
     }
   }
 
