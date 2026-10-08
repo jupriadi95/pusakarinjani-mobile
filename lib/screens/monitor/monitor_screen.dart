@@ -167,8 +167,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         // ONLY clear score when a match is started!
         if (isStartingNewMatch) {
           ref.read(nilaiListProvider.notifier).clear();
+          _hideWinnerModal();
           setState(() {
-            _showWinnerModal = false;
             _dewanPemenang = null;
             _dsqSudut = null;
             _dsqNama = null;
@@ -185,8 +185,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
         // Sembunyikan popup pemenang ketika Dewan memilih partai lain
         if (isPartaiBaru && _showWinnerModal) {
+          _hideWinnerModal();
           setState(() {
-            _showWinnerModal = false;
             _dewanPemenang = null;
           });
         }
@@ -212,9 +212,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
         // Show winner celebration modal if match finished
         if (isNowFinished && mounted) {
-          setState(() {
-            _showWinnerModal = true;
-          });
+          _triggerWinnerModal();
         }
       }
     });
@@ -369,7 +367,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               data['keterangan']?.toString() ??
               'Peserta Sudut ${sudut.toUpperCase()} Diskualifikasi!';
           _pauseTimer();
-          _showWinnerModal = true;
+          _triggerWinnerModal();
         }
       });
 
@@ -398,8 +396,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _dsqNama = nama;
         _dsqMessage = message;
         _pauseTimer();
-        _showWinnerModal = true;
       });
+      _triggerWinnerModal();
     });
 
     // ── Dewan Verification Socket Listeners ──
@@ -495,14 +493,14 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _pauseTimer();
         } else if (action == 'resume' || action == 'start') {
           _startTimer();
-          _showWinnerModal = false;
+          _hideWinnerModal();
           _dewanPemenang = null;
           _dsqSudut = null;
           _dsqNama = null;
         } else if (action == 'reset') {
           _pauseTimer();
           _timerSeconds = 0;
-          _showWinnerModal = false;
+          _hideWinnerModal();
           _dewanPemenang = null;
           _dsqSudut = null;
           _dsqNama = null;
@@ -512,9 +510,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _kpTeguranMerah = 0;
         } else if (action == 'stop') {
           _pauseTimer();
-          _showWinnerModal = true;
+          _triggerWinnerModal();
         }
       });
+
+      if (pemenang == 'biru' || pemenang == 'merah') {
+        _triggerWinnerModal();
+      }
 
       if (action == 'stop') {
         _fetchNilai();
@@ -554,8 +556,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _dewanPemenang = pemenang;
         }
         _pauseTimer();
-        _showWinnerModal = true;
       });
+      _triggerWinnerModal();
       _fetchNilai();
     });
   }
@@ -754,6 +756,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
   @override
   void dispose() {
+    _winnerDismissTimer?.cancel();
     _verifikasiDismissTimer?.cancel();
     _fetchNilaiDebounce?.cancel();
     _countdownTimer?.cancel();
@@ -3670,30 +3673,77 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Auto-close Indicator
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.hourglass_bottom_rounded,
+                size: 13,
+                color: Color(0xFFFBBF24),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Otomatis kembali ke standby dalam $_winnerDismissRemainingSeconds detik',
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
 
           // Dismiss / Standby Button
           GestureDetector(
-            onTap: () {
-              setState(() => _showWinnerModal = false);
-            },
+            onTap: _hideWinnerModal,
             child: Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 28,
-                vertical: 10,
+                horizontal: 24,
+                vertical: 9,
               ),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFF475569)),
               ),
-              child: const Text(
-                'TUTUP BANNER PEMENANG',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'TUTUP BANNER SEKARANG',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Text(
+                      '${_winnerDismissRemainingSeconds}s',
+                      style: const TextStyle(
+                        color: Color(0xFFFBBF24),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
