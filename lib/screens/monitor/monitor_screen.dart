@@ -12,6 +12,7 @@ import '../../providers/gelanggang_provider.dart';
 import '../../providers/jadwal_provider.dart';
 import '../../providers/nilai_provider.dart';
 import '../../providers/socket_provider.dart';
+import '../../config/env.dart';
 import '../../services/api_service.dart';
 import '../../widgets/standby_screen.dart';
 
@@ -653,9 +654,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     if (media == null || media.url == null || media.url!.isEmpty) return null;
     final url = media.url!;
     if (url.startsWith('http://') || url.startsWith('https://')) {
+      // In offline mode, if the image URL points to the cloud domain, rewrite to the local backend base URL
+      if (Env.isOffline && url.contains('pusakarinjani.my.id')) {
+        return url.replaceFirst(RegExp(r'https?://[^/]+'), Env.apiBaseUrl);
+      }
       return url;
     }
-    return 'https://be.pusakarinjani.my.id$url';
+    return '${Env.apiBaseUrl}$url';
   }
 
   String _resolveCurrentBabak() {

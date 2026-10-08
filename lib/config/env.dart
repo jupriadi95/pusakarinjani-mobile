@@ -10,7 +10,8 @@ class Env {
 
   // ── Backend URLs ──
   static const String _onlineUrl = 'https://be.pusakarinjani.my.id';
-  static const String _offlineUrl = 'http://be-local.pusakarinjani.my.id';
+  static const String defaultOfflineUrl = 'http://be-local.pusakarinjani.my.id';
+  static String _offlineUrl = defaultOfflineUrl;
 
   // ── Compile-time override (still supported via --dart-define) ──
   static const String _envOverrideUrl = String.fromEnvironment(
@@ -24,6 +25,9 @@ class Env {
     if (_envOverrideUrl.isNotEmpty) return _envOverrideUrl;
     return _isOffline ? _offlineUrl : _onlineUrl;
   }
+
+  /// Current configured offline URL
+  static String get offlineUrl => _offlineUrl;
 
   /// Full API URL (Strapi REST endpoint)
   static String get apiUrl => '$apiBaseUrl/api';
@@ -51,9 +55,23 @@ class Env {
     _isOffline = false;
   }
 
-  /// Switch to Offline / LAN mode with custom token
-  static void setOffline({required String token}) {
+  /// Switch to Offline / LAN mode with custom token and optional server URL
+  static void setOffline({required String token, String? url}) {
     _isOffline = true;
     _offlineToken = token.trim();
+    if (url != null && url.trim().isNotEmpty) {
+      String clean = url.trim();
+      // Ensure HTTP scheme is present if user entered raw host/ip
+      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+        clean = 'http://$clean';
+      }
+      // Remove trailing slash
+      if (clean.endsWith('/')) {
+        clean = clean.substring(0, clean.length - 1);
+      }
+      _offlineUrl = clean;
+    } else {
+      _offlineUrl = defaultOfflineUrl;
+    }
   }
 }

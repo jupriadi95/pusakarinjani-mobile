@@ -34,8 +34,10 @@ class _ModeSelectorScreenState extends State<ModeSelectorScreen> {
   }
 
   Future<void> _openOfflineAuthModal() async {
-    // Load previously saved offline token if available
+    // Load previously saved offline token & server URL if available
     final savedToken = await StorageService.loadOfflineToken() ?? '';
+    final savedUrl =
+        await StorageService.loadOfflineUrl() ?? Env.defaultOfflineUrl;
 
     if (!mounted) return;
 
@@ -45,9 +47,11 @@ class _ModeSelectorScreenState extends State<ModeSelectorScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _OfflineAuthBottomSheet(
         initialToken: savedToken,
-        onConnect: (token) async {
+        initialUrl: savedUrl,
+        onConnect: (token, url) async {
           await StorageService.saveOfflineToken(token);
-          Env.setOffline(token: token);
+          await StorageService.saveOfflineUrl(url);
+          Env.setOffline(token: token, url: url);
           ApiService.reinitialize();
           if (mounted) {
             Navigator.of(context).pushReplacementNamed('/home');
@@ -449,10 +453,12 @@ class _ModeSelectorScreenState extends State<ModeSelectorScreen> {
 /// Modal Bottom Sheet for Entering / Scanning Offline Token
 class _OfflineAuthBottomSheet extends StatefulWidget {
   final String initialToken;
-  final ValueChanged<String> onConnect;
+  final String initialUrl;
+  final void Function(String token, String url) onConnect;
 
   const _OfflineAuthBottomSheet({
     required this.initialToken,
+    required this.initialUrl,
     required this.onConnect,
   });
 
@@ -463,17 +469,25 @@ class _OfflineAuthBottomSheet extends StatefulWidget {
 
 class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
   late final TextEditingController _tokenController;
+  late final TextEditingController _urlController;
+  bool _showUrlConfig = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tokenController = TextEditingController(text: widget.initialToken);
+    _urlController = TextEditingController(
+      text: widget.initialUrl.isNotEmpty
+          ? widget.initialUrl
+          : Env.defaultOfflineUrl,
+    );
   }
 
   @override
   void dispose() {
     _tokenController.dispose();
+    _urlController.dispose();
     super.dispose();
   }
 
@@ -584,6 +598,7 @@ class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
 
   void _handleSubmit() {
     final token = _tokenController.text.trim();
+    final url = _urlController.text.trim();
     if (token.isEmpty) {
       setState(() {
         _errorMessage = 'Token otentikasi tidak boleh kosong!';
@@ -592,7 +607,7 @@ class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
     }
 
     Navigator.of(context).pop(); // Close bottom sheet
-    widget.onConnect(token);
+    widget.onConnect(token, url.isNotEmpty ? url : Env.defaultOfflineUrl);
   }
 
   @override
@@ -669,13 +684,18 @@ class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
                           const Icon(Icons.dns_rounded,
                               size: 12, color: PusakaTheme.emerald400),
                           const SizedBox(width: 4),
-                          Text(
-                            Env.apiBaseUrl,
-                            style: const TextStyle(
-                              color: PusakaTheme.emerald400,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'monospace',
+                          Expanded(
+                            child: Text(
+                              _urlController.text.isNotEmpty
+                                  ? _urlController.text
+                                  : Env.defaultOfflineUrl,
+                              style: const TextStyle(
+                                color: PusakaTheme.emerald400,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'monospace',
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -701,6 +721,132 @@ class _OfflineAuthBottomSheetState extends State<_OfflineAuthBottomSheet> {
                 color: PusakaTheme.slate400,
                 fontSize: 12,
                 height: 1.4,
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Server URL Config Box
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: PusakaTheme.slate900,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: PusakaTheme.slate800,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.http_rounded,
+                              size: 18, color: PusakaTheme.emerald400),
+                          SizedBox(width: 6),
+                          Text(
+                            'SERVER URL (HTTP)',
+                            style: TextStyle(
+                              color: PusakaTheme.slate300,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _showUrlConfig = !_showUrlConfig;
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          _showUrlConfig ? 'Selesai' : 'Ubah URL',
+                          style: const TextStyle(
+                            color: PusakaTheme.emerald400,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_showUrlConfig) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _urlController,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                      decoration: InputDecoration(
+                        hintText: Env.defaultOfflineUrl,
+                        hintStyle: const TextStyle(
+                          color: PusakaTheme.slate600,
+                          fontSize: 12,
+                        ),
+                        prefixIcon: const Icon(Icons.link_rounded,
+                            color: PusakaTheme.emerald400, size: 16),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.refresh_rounded,
+                              color: PusakaTheme.slate400, size: 16),
+                          tooltip: 'Reset ke default',
+                          onPressed: () {
+                            setState(() {
+                              _urlController.text = Env.defaultOfflineUrl;
+                            });
+                          },
+                        ),
+                        filled: true,
+                        fillColor: PusakaTheme.slate950,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: PusakaTheme.slate700),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: PusakaTheme.slate800),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: PusakaTheme.emerald400,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _urlController.text.isNotEmpty
+                          ? _urlController.text
+                          : Env.defaultOfflineUrl,
+                      style: const TextStyle(
+                        color: PusakaTheme.emerald400,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 

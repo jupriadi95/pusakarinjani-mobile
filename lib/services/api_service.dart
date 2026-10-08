@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart';
 import '../config/env.dart';
 
 /// API Service — Replika dari useApiService.ts Nuxt.
@@ -23,6 +26,18 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     ));
+
+    // Ensure cleartext HTTP and local static DNS certificates succeed on mobile/desktop
+    if (!kIsWeb) {
+      final adapter = _dio.httpClientAdapter;
+      if (adapter is IOHttpClientAdapter) {
+        adapter.createHttpClient = () {
+          final client = HttpClient();
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        };
+      }
+    }
   }
 
   /// Re-initialize Dio with the current Env URL (call after mode switch).
@@ -102,7 +117,7 @@ class ApiService {
   // ── Custom endpoints ──
 
   /// Fetch sponsors for a given event.
-  /// GET /sponsors?filters[event][documentId][$eq]=<eventId>&populate=logo
+  /// GET /sponsors?filters[event][documentId][$eq]={eventId}&populate=logo
   Future<List<dynamic>> fetchSponsorsByEvent(String eventDocumentId) async {
     try {
       final response = await _dio.get(

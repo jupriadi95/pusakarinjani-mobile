@@ -7,6 +7,7 @@ import '../models/gelanggang.dart';
 class StorageService {
   static const String _keyActiveGelanggang = 'active_gelanggang';
   static const String _keyOfflineToken = 'offline_auth_token';
+  static const String _keyOfflineUrl = 'offline_server_url';
 
   /// Save active gelanggang to local storage
   static Future<void> saveActiveGelanggang(Gelanggang gelanggang) async {
@@ -43,5 +44,17 @@ class StorageService {
   static Future<String?> loadOfflineToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyOfflineToken);
+  }
+
+  /// Save offline server URL to local storage
+  static Future<void> saveOfflineUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyOfflineUrl, url);
+  }
+
+  /// Load offline server URL from local storage
+  static Future<String?> loadOfflineUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyOfflineUrl);
   }
 }

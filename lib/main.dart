@@ -7,8 +7,22 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 
+/// Custom HttpOverrides allowing local network static DNS, HTTP, and self-signed certificates
+class PusakaHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (cert, host, port) => true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Allow cleartext HTTP and local self-signed certificates on non-web platforms
+  if (!kIsWeb) {
+    HttpOverrides.global = PusakaHttpOverrides();
+  }
 
   // Desktop Window Management: Auto Fullscreen on Windows/Desktop
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

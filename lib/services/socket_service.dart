@@ -105,19 +105,22 @@ class SocketService {
       _socket!.dispose();
     }
 
+    debugPrint('[Socket] Connecting to realtime server at: ${Env.apiBaseUrl}');
+
     _socket = io.io(
       Env.apiBaseUrl,
       io.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(['websocket', 'polling'])
+          .enableForceNew()
           .disableAutoConnect()
           .enableReconnection()
-          .setReconnectionAttempts(10)
-          .setReconnectionDelay(2000)
+          .setReconnectionAttempts(20)
+          .setReconnectionDelay(1500)
           .build(),
     );
 
     _socket!.onConnect((_) {
-      debugPrint('[Socket] Connected to realtime server');
+      debugPrint('[Socket] Connected to realtime server (${Env.apiBaseUrl})');
       _isConnected = true;
       _connectionController.add(true);
 
@@ -135,7 +138,7 @@ class SocketService {
     });
 
     _socket!.onConnectError((error) {
-      debugPrint('[Socket] Connection error: $error');
+      debugPrint('[Socket] Connection error on ${Env.apiBaseUrl}: $error');
       _isConnected = false;
       _connectionController.add(false);
     });

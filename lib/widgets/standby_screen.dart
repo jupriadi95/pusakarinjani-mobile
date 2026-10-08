@@ -181,7 +181,7 @@ class _TopHeader extends StatelessWidget {
                 child: Image.asset(
                   'assets/img/logo_ipsi.webp',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Icon(
+                  errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.sports_kabaddi,
                     color: PusakaTheme.amber400,
                     size: isLarge ? 30 : 20,
@@ -630,7 +630,12 @@ class _SponsorLogoCardState extends State<_SponsorLogoCard>
   String? get _logoUrl {
     final raw = widget.sponsor.logo?.url;
     if (raw == null || raw.isEmpty) return null;
-    if (raw.startsWith('http')) return raw;
+    if (raw.startsWith('http')) {
+      if (Env.isOffline && raw.contains('pusakarinjani.my.id')) {
+        return raw.replaceFirst(RegExp(r'https?://[^/]+'), Env.apiBaseUrl);
+      }
+      return raw;
+    }
     return '${Env.apiBaseUrl}$raw';
   }
 
@@ -670,7 +675,7 @@ class _SponsorLogoCardState extends State<_SponsorLogoCard>
               ? Image.network(
                   logoUrl,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => _FallbackLogo(
+                  errorBuilder: (context, error, stackTrace) => _FallbackLogo(
                     label: widget.sponsor.label,
                     size: size,
                     color: widget.glowColor,
