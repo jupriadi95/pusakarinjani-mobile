@@ -67,7 +67,10 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   Timer? _verifikasiDismissTimer;
 
   // ── Winner Announcement State ──
+  static const int _winnerDisplayDurationSeconds = 20;
   bool _showWinnerModal = false;
+  Timer? _winnerDismissTimer;
+  int _winnerDismissRemainingSeconds = _winnerDisplayDurationSeconds;
   String? _liveBabakOverride;
 
   // ── Keputusan Dewan saat skor SERI ('biru' | 'merah') ──
@@ -555,6 +558,71 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       });
       _fetchNilai();
     });
+  }
+
+  /// Cek apakah skor saat ini seri dan Dewan belum memberikan keputusan
+  bool _isSeriWaitingDewan() {
+    if (_dsqSudut != null && _dsqSudut!.isNotEmpty) return false;
+    if (_dewanPemenang != null) return false;
+    final nilaiList = ref.read(nilaiListProvider);
+    final a1Id = _atlit1?.documentId ??
+        _atlit1?.id?.toString() ??
+        _gelanggang?.atlit1Id ??
+        '';
+    final a2Id = _atlit2?.documentId ??
+        _atlit2?.id?.toString() ??
+        _gelanggang?.atlit2Id ??
+        '';
+    final biruScore = countNilaiForPeserta(nilaiList, a1Id, sudut: 'biru');
+    final merahScore = countNilaiForPeserta(nilaiList, a2Id, sudut: 'merah');
+    return biruScore == merahScore;
+  }
+
+  /// Tampilkan popup pemenang dan mulai countdown 20 detik untuk otomatis ditutup
+  void _triggerWinnerModal() {
+    _winnerDismissTimer?.cancel();
+    _winnerDismissRemainingSeconds = _winnerDisplayDurationSeconds;
+    if (mounted) {
+      setState(() {
+        _showWinnerModal = true;
+      });
+    }
+
+    // Jika skor seri dan Dewan belum memutuskan pemenang, jangan jalankan timer auto-dismiss 20 detik
+    // agar layar statistik capaian nilai tetap terlihat oleh Dewan sampai ada keputusan.
+    if (_isSeriWaitingDewan()) {
+      return;
+    }
+
+    _winnerDismissTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_winnerDismissRemainingSeconds > 1) {
+        setState(() {
+          _winnerDismissRemainingSeconds--;
+        });
+      } else {
+        timer.cancel();
+        _winnerDismissTimer = null;
+        setState(() {
+          _winnerDismissRemainingSeconds = 0;
+          _showWinnerModal = false;
+        });
+      }
+    });
+  }
+
+  /// Sembunyikan popup pemenang dan batalkan timer countdown
+  void _hideWinnerModal() {
+    _winnerDismissTimer?.cancel();
+    _winnerDismissTimer = null;
+    if (mounted && _showWinnerModal) {
+      setState(() {
+        _showWinnerModal = false;
+      });
+    }
   }
 
   void _startTimer() {
