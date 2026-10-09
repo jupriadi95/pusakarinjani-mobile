@@ -41,6 +41,30 @@ class Nilai {
   /// Check if this score was rejected (ditolak)
   bool get isDitolak => status == 'ditolak';
 
+  /// Check if this score belongs to a specific match/jadwal
+  bool matchesJadwal({String? targetDocId, String? targetId}) {
+    final hasTarget = (targetDocId != null && targetDocId.isNotEmpty) ||
+        (targetId != null && targetId.isNotEmpty);
+    if (!hasTarget) return true;
+
+    final nDoc = jadwalDocId;
+    final nId = jadwalId;
+    final hasRef = (nDoc != null && nDoc.isNotEmpty) ||
+        (nId != null && nId.isNotEmpty);
+
+    if (hasRef) {
+      final matchDoc = targetDocId != null &&
+          targetDocId.isNotEmpty &&
+          (nDoc == targetDocId || nId == targetDocId);
+      final matchId = targetId != null &&
+          targetId.isNotEmpty &&
+          (nId == targetId || nDoc == targetId);
+      return matchDoc || matchId;
+    }
+
+    return false;
+  }
+
   /// Human-readable label for this score type
   String get poinLabel {
     if (jenis != null) {
@@ -159,20 +183,44 @@ class Nilai {
             rawJson['jadwal_id'] ??
             rawJson['jadwalId'])
         ?.toString();
-    final jadwalData = json['jadwal'] ?? rawJson['jadwal'];
-    if (jadwalData != null) {
-      if (jadwalData is Map) {
-        resolvedJadwalDocId ??=
-            (jadwalData['documentId'] ?? jadwalData['docId'])?.toString();
-        resolvedJadwalId ??= (jadwalData['id'])?.toString();
-      } else if (jadwalData is String || jadwalData is int) {
-        final jStr = jadwalData.toString();
+    dynamic rawJadwalData = json['jadwal'] ?? rawJson['jadwal'];
+    if (rawJadwalData is Map && rawJadwalData['data'] != null) {
+      rawJadwalData = rawJadwalData['data'];
+    }
+    if (rawJadwalData != null) {
+      if (rawJadwalData is Map) {
+        final inner = rawJadwalData['attributes'] is Map
+            ? rawJadwalData['attributes'] as Map
+            : rawJadwalData;
+        resolvedJadwalDocId ??= (rawJadwalData['documentId'] ??
+                rawJadwalData['docId'] ??
+                rawJadwalData['document_id'] ??
+                inner['documentId'] ??
+                inner['docId'] ??
+                inner['document_id'])
+            ?.toString();
+        resolvedJadwalId ??=
+            (rawJadwalData['id'] ?? inner['id'])?.toString();
+      } else if (rawJadwalData is String || rawJadwalData is int) {
+        final jStr = rawJadwalData.toString();
         if (int.tryParse(jStr) != null) {
           resolvedJadwalId ??= jStr;
         } else {
           resolvedJadwalDocId ??= jStr;
         }
       }
+    }
+
+    // Normalization: In Strapi v5, documentId is an alphanumeric string
+    if (resolvedJadwalDocId == null &&
+        resolvedJadwalId != null &&
+        int.tryParse(resolvedJadwalId) == null) {
+      resolvedJadwalDocId = resolvedJadwalId;
+    }
+    if (resolvedJadwalId == null &&
+        resolvedJadwalDocId != null &&
+        int.tryParse(resolvedJadwalDocId) != null) {
+      resolvedJadwalId = resolvedJadwalDocId;
     }
 
     return Nilai(

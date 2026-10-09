@@ -164,8 +164,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                 updated.atlit2Id != _gelanggang?.atlit2Id) &&
             !updated.isBerlangsung;
 
-        // ONLY clear score when a match is started!
-        if (isStartingNewMatch) {
+        // Clear score when a new match is started OR when dewan switches to a new partai!
+        if (isStartingNewMatch || isPartaiBaru) {
           ref.read(nilaiListProvider.notifier).clear();
           _hideWinnerModal();
           setState(() {
@@ -180,14 +180,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             _kpTeguranBiru = 0;
             _kpPembinaanBiru = 0;
             _liveBabakOverride = null;
-          });
-        }
-
-        // Sembunyikan popup pemenang ketika Dewan memilih partai lain
-        if (isPartaiBaru && _showWinnerModal) {
-          _hideWinnerModal();
-          setState(() {
-            _dewanPemenang = null;
+            _activeJadwal = null;
           });
         }
 
@@ -575,8 +568,23 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _atlit2?.id?.toString() ??
         _gelanggang?.atlit2Id ??
         '';
-    final biruScore = countNilaiForPeserta(nilaiList, a1Id, sudut: 'biru');
-    final merahScore = countNilaiForPeserta(nilaiList, a2Id, sudut: 'merah');
+    final active = _resolveActiveJadwal();
+    final jDocId = active?.documentId ?? '';
+    final jId = active?.id?.toString() ?? '';
+    final biruScore = countNilaiForPeserta(
+      nilaiList,
+      a1Id,
+      sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
+    final merahScore = countNilaiForPeserta(
+      nilaiList,
+      a2Id,
+      sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
     return biruScore == merahScore;
   }
 
@@ -692,20 +700,64 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     }
   }
 
+  /// Mendapatkan data Jadwal/Partai yang aktif ditampilkan di monitor
+  Jadwal? _resolveActiveJadwal([List<Jadwal>? list]) {
+    final jadwals = list ?? ref.read(jadwalListProvider).valueOrNull ?? [];
+    if (jadwals.isEmpty) return _activeJadwal;
+
+    final a1 = _gelanggang?.atlit1Id ?? _atlit1?.documentId ?? _atlit1?.id?.toString();
+    final a2 = _gelanggang?.atlit2Id ?? _atlit2?.documentId ?? _atlit2?.id?.toString();
+
+    // 1. Prioritas utama: Partai dengan status 'berlangsung' saat gelanggang aktif
+    final ongoing =
+        jadwals.where((j) => j.statusTanding == 'berlangsung').firstOrNull;
+    if (ongoing != null && (_gelanggang?.isBerlangsung ?? false)) {
+      return ongoing;
+    }
+
+    // 2. Prioritas kedua: Partai yang mencocokkan KEDUA atlet sudut biru & merah
+    if (a1 != null && a1.isNotEmpty && a2 != null && a2.isNotEmpty) {
+      final both = jadwals.where((j) {
+        final bDoc =
+            j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
+        final mDoc =
+            j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
+        return (bDoc == a1 && mDoc == a2) || (bDoc == a2 && mDoc == a1);
+      }).firstOrNull;
+      if (both != null) return both;
+    }
+
+    // 3. Match dengan status 'berlangsung' jika ada
+    if (ongoing != null) return ongoing;
+
+    // 4. Match dengan salah satu atlet jika salah satu atlet cocok
+    if ((a1 != null && a1.isNotEmpty) || (a2 != null && a2.isNotEmpty)) {
+      final single = jadwals.where((j) {
+        final bDoc =
+            j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
+        final mDoc =
+            j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
+        final matchA1 =
+            a1 != null && a1.isNotEmpty && (bDoc == a1 || mDoc == a1);
+        final matchA2 =
+            a2 != null && a2.isNotEmpty && (bDoc == a2 || mDoc == a2);
+        return matchA1 || matchA2;
+      }).firstOrNull;
+      if (single != null) return single;
+    }
+
+    return _activeJadwal ?? jadwals.firstOrNull;
+  }
+
   Future<void> _fetchNilai() async {
     if (_gelanggang == null) return;
-    final a1 = _gelanggang!.atlit1Id ?? '';
-    final a2 = _gelanggang!.atlit2Id ?? '';
+    final a1 = _gelanggang!.atlit1Id ?? _atlit1?.documentId ?? _atlit1?.id?.toString() ?? '';
+    final a2 = _gelanggang!.atlit2Id ?? _atlit2?.documentId ?? _atlit2?.id?.toString() ?? '';
 
-    final jadwals = ref.read(jadwalListProvider).valueOrNull ?? [];
-    final activeJadwal = _activeJadwal ??
-        jadwals.where((j) {
-          final bDoc =
-              j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-          final mDoc =
-              j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
-          return (bDoc != null && bDoc == a1) || (mDoc != null && mDoc == a2);
-        }).firstOrNull;
+    final activeJadwal = _resolveActiveJadwal();
+    if (activeJadwal != null && mounted) {
+      _activeJadwal = activeJadwal;
+    }
 
     final jDocId = activeJadwal?.documentId ?? '';
     final jId = activeJadwal?.id?.toString() ?? '';
@@ -737,21 +789,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     if (_liveBabakOverride != null && _liveBabakOverride!.isNotEmpty) {
       return _liveBabakOverride!;
     }
-    final list = ref.read(jadwalListProvider).valueOrNull ?? [];
-    if (list.isEmpty) return _activeJadwal?.babak ?? '1';
-
-    final a1 = _gelanggang?.atlit1Id;
-    final a2 = _gelanggang?.atlit2Id;
-
-    final match = list.where((j) {
-      final mId = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
-      final bId = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-      return (mId == a1 && bId == a2) ||
-          (mId == a2 && bId == a1) ||
-          j.statusTanding == 'berlangsung';
-    }).firstOrNull;
-
-    return match?.babak ?? '1';
+    final active = _resolveActiveJadwal();
+    return active?.babak ?? '1';
   }
 
   @override
@@ -780,6 +819,37 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to jadwalList updates so active match is identified promptly
+    ref.listen<AsyncValue<List<Jadwal>>>(jadwalListProvider, (previous, next) {
+      final list = next.valueOrNull;
+      if (list != null && list.isNotEmpty) {
+        final resolved = _resolveActiveJadwal(list);
+        if (resolved != null && resolved.documentId != _activeJadwal?.documentId) {
+          setState(() {
+            _activeJadwal = resolved;
+          });
+          _fetchNilai();
+        }
+      }
+    });
+
+    ref.listen<Gelanggang?>(activeGelanggangProvider, (previous, next) {
+      if (next != null) {
+        final atlitChanged = next.atlit1Id != previous?.atlit1Id || next.atlit2Id != previous?.atlit2Id;
+        if (atlitChanged) {
+          ref.read(nilaiListProvider.notifier).clear();
+          setState(() {
+            _gelanggang = next;
+            _activeJadwal = _resolveActiveJadwal();
+          });
+          _fetchNilai();
+        }
+      }
+    });
+
+    // Re-evaluate whenever jadwal list state updates
+    ref.watch(jadwalListProvider);
+
     // STATE 2: STANDBY
     if (_gelanggang?.statusTanding != 'berlangsung' && !_showWinnerModal) {
       return Scaffold(
@@ -889,25 +959,69 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _gelanggang?.atlit2Id ??
         '';
 
-    final atlit1Score = countNilaiForPeserta(nilaiList, a1Id, sudut: 'biru');
-    final atlit2Score = countNilaiForPeserta(nilaiList, a2Id, sudut: 'merah');
+    final activeJadwal = _resolveActiveJadwal();
+    final jDocId = activeJadwal?.documentId ?? '';
+    final jId = activeJadwal?.id?.toString() ?? '';
+
+    // Filter score records strictly to the active match/jadwal
+    final matchNilaiList = (jDocId.isNotEmpty || jId.isNotEmpty)
+        ? nilaiList.where((n) {
+            final nDoc = n.jadwalDocId;
+            final nId = n.jadwalId;
+            final hasJadwalRef = (nDoc != null && nDoc.isNotEmpty) ||
+                (nId != null && nId.isNotEmpty);
+            if (hasJadwalRef) {
+              final matchDoc = jDocId.isNotEmpty && (nDoc == jDocId || nId == jDocId);
+              final matchId = jId.isNotEmpty && (nId == jId || nDoc == jId);
+              return matchDoc || matchId;
+            }
+            final doc = n.peserta?.documentId;
+            final id = n.peserta?.id?.toString();
+            final hasAthlete = (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+            if (hasAthlete) {
+              final matchA1 = a1Id.isNotEmpty && (doc == a1Id || id == a1Id);
+              final matchA2 = a2Id.isNotEmpty && (doc == a2Id || id == a2Id);
+              return matchA1 || matchA2;
+            }
+            return true;
+          }).toList()
+        : nilaiList;
+
+    final atlit1Score = countNilaiForPeserta(
+      matchNilaiList,
+      a1Id,
+      sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
+    final atlit2Score = countNilaiForPeserta(
+      matchNilaiList,
+      a2Id,
+      sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
     final atlit1Logs = recentNilaiForPeserta(
-      nilaiList,
+      matchNilaiList,
       a1Id,
       limit: 5,
       sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
     final atlit2Logs = recentNilaiForPeserta(
-      nilaiList,
+      matchNilaiList,
       a2Id,
       limit: 5,
       sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
     final currentBabak = _resolveCurrentBabak();
 
     // Dynamically derive sanction indicator lights from score history and live state
     int computeSanctions(String corner, String jenis, int liveState) {
-      final relevant = nilaiList.where((n) {
+      final relevant = matchNilaiList.where((n) {
         if (!n.isSah) return false;
         final matchesCorner = (n.sudut?.toLowerCase() == corner.toLowerCase());
         final isCurrentRound = (n.babak == null ||
@@ -1173,7 +1287,11 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
               ),
             ),
             child: Text(
-              _gelanggang?.keterangan?.toUpperCase() ?? 'TANDING KELAS DEWASA',
+              _activeJadwal?.nomorPartai != null
+                  ? 'PARTAI #${_activeJadwal!.nomorPartai}${_activeJadwal!.kelas?.namaKelas != null ? " • ${_activeJadwal!.kelas!.namaKelas}" : (_gelanggang?.keterangan != null ? " • ${_gelanggang!.keterangan}" : "")}'
+                      .toUpperCase()
+                  : (_gelanggang?.keterangan?.toUpperCase() ??
+                      'TANDING KELAS DEWASA'),
               style: const TextStyle(
                 color: Color(0xFFA5B4FC),
                 fontSize: 11.5,
@@ -2784,8 +2902,23 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         _atlit1?.documentId ?? _atlit1?.id?.toString() ?? _gelanggang?.atlit1Id ?? '';
     final a2Id =
         _atlit2?.documentId ?? _atlit2?.id?.toString() ?? _gelanggang?.atlit2Id ?? '';
-    final biru = computeMatchStats(nilaiList, a1Id, sudut: 'biru');
-    final merah = computeMatchStats(nilaiList, a2Id, sudut: 'merah');
+    final active = _resolveActiveJadwal();
+    final jDocId = active?.documentId ?? '';
+    final jId = active?.id?.toString() ?? '';
+    final biru = computeMatchStats(
+      nilaiList,
+      a1Id,
+      sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
+    final merah = computeMatchStats(
+      nilaiList,
+      a2Id,
+      sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
 
     const biruColor = Color(0xFF38BDF8);
     const merahColor = Color(0xFFFB7185);
@@ -3047,12 +3180,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         ? 'SUDUT MERAH'
         : 'SERI / DRAW';
     final jadwals = ref.watch(jadwalListProvider).valueOrNull ?? [];
-    final activeJadwal = jadwals.where((j) {
-      final bDoc = j.biruPeserta?.documentId ?? j.biruPeserta?.id?.toString();
-      final mDoc = j.merahPeserta?.documentId ?? j.merahPeserta?.id?.toString();
-      return (bDoc != null && bDoc == _gelanggang?.atlit1Id) ||
-          (mDoc != null && mDoc == _gelanggang?.atlit2Id);
-    }).firstOrNull;
+    final activeJadwal = _resolveActiveJadwal(jadwals);
 
     final winnerAtlit = isBiruWin
         ? (_atlit1 ?? _activeJadwal?.biruPeserta ?? activeJadwal?.biruPeserta)

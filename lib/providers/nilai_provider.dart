@@ -45,9 +45,9 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
       };
 
       if (jadwalDocId != null && jadwalDocId.isNotEmpty) {
-        params['filters[jadwal][documentId]'] = jadwalDocId;
+        params['filters[jadwal][documentId][\$eq]'] = jadwalDocId;
       } else if (jadwalId != null && jadwalId.isNotEmpty) {
-        params['filters[jadwal][id]'] = jadwalId;
+        params['filters[jadwal][id][\$eq]'] = jadwalId;
       }
 
       final response = await _api.findProtect('nilais', params: params);
@@ -61,23 +61,27 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
       final filteredList = fetchedList.where((n) {
         // 1. Strict Jadwal filter if score entry has a recorded match reference
         if (hasJadwal) {
-          if (n.jadwalDocId != null &&
-              n.jadwalDocId!.isNotEmpty &&
-              jadwalDocId != null &&
-              jadwalDocId.isNotEmpty) {
-            if (n.jadwalDocId != jadwalDocId) return false;
-          }
-          if (n.jadwalId != null &&
-              n.jadwalId!.isNotEmpty &&
-              jadwalId != null &&
-              jadwalId.isNotEmpty) {
-            if (n.jadwalId != jadwalId) return false;
+          final nDoc = n.jadwalDocId;
+          final nId = n.jadwalId;
+          final hasJadwalRef = (nDoc != null && nDoc.isNotEmpty) ||
+              (nId != null && nId.isNotEmpty);
+
+          if (hasJadwalRef) {
+            final matchDoc = (jadwalDocId != null &&
+                jadwalDocId.isNotEmpty &&
+                (nDoc == jadwalDocId || nId == jadwalDocId));
+            final matchId = (jadwalId != null &&
+                jadwalId.isNotEmpty &&
+                (nId == jadwalId || nDoc == jadwalId));
+            if (!matchDoc && !matchId) return false;
           }
         }
 
         // 2. Athlete ID matching
         final doc = n.peserta?.documentId;
         final id = n.peserta?.id?.toString();
+        final hasAthlete = (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+
         final matchesA1 = (atlit1Id.isNotEmpty &&
                 (doc == atlit1Id || id == atlit1Id)) ||
             (atlit1AltId != null &&
@@ -89,12 +93,9 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
                 atlit2AltId.isNotEmpty &&
                 (doc == atlit2AltId || id == atlit2AltId));
 
-        if (matchesA1 || matchesA2) return true;
-
-        // If score record explicitly belongs to a DIFFERENT athlete, reject it!
-        if (n.peserta != null &&
-            ((doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty))) {
-          return false;
+        if (hasAthlete) {
+          if (!matchesA1 && !matchesA2) return false;
+          return true;
         }
 
         // 3. Fallback for unpopulated corner actions (KP actions without athlete object)
@@ -117,22 +118,25 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
         if (!isTemporaryOrSocket) return false;
 
         if (hasJadwal) {
-          if (item.jadwalDocId != null &&
-              item.jadwalDocId!.isNotEmpty &&
-              jadwalDocId != null &&
-              jadwalDocId.isNotEmpty) {
-            if (item.jadwalDocId != jadwalDocId) return false;
-          }
-          if (item.jadwalId != null &&
-              item.jadwalId!.isNotEmpty &&
-              jadwalId != null &&
-              jadwalId.isNotEmpty) {
-            if (item.jadwalId != jadwalId) return false;
+          final nDoc = item.jadwalDocId;
+          final nId = item.jadwalId;
+          final hasJadwalRef = (nDoc != null && nDoc.isNotEmpty) ||
+              (nId != null && nId.isNotEmpty);
+          if (hasJadwalRef) {
+            final matchDoc = (jadwalDocId != null &&
+                jadwalDocId.isNotEmpty &&
+                (nDoc == jadwalDocId || nId == jadwalDocId));
+            final matchId = (jadwalId != null &&
+                jadwalId.isNotEmpty &&
+                (nId == jadwalId || nDoc == jadwalId));
+            if (!matchDoc && !matchId) return false;
           }
         }
 
         final doc = item.peserta?.documentId;
         final id = item.peserta?.id?.toString();
+        final hasAthlete = (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+
         final matchesA1 = (atlit1Id.isNotEmpty &&
                 ((doc != null && doc == atlit1Id) || (id != null && id == atlit1Id))) ||
             (atlit1AltId != null &&
@@ -143,10 +147,14 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
             (atlit2AltId != null &&
                 atlit2AltId.isNotEmpty &&
                 ((doc != null && doc == atlit2AltId) || (id != null && id == atlit2AltId)));
-        final matchesCorner = item.sudut != null &&
-            (item.sudut!.toLowerCase() == 'biru' || item.sudut!.toLowerCase() == 'merah');
 
-        if (!matchesA1 && !matchesA2 && !matchesCorner) return false;
+        if (hasAthlete) {
+          if (!matchesA1 && !matchesA2) return false;
+        } else {
+          final matchesCorner = item.sudut != null &&
+              (item.sudut!.toLowerCase() == 'biru' || item.sudut!.toLowerCase() == 'merah');
+          if (!matchesCorner) return false;
+        }
 
         final alreadyInFetched = filteredList.any((f) =>
             (f.documentId != null && f.documentId == item.documentId) ||
@@ -280,49 +288,128 @@ class NilaiListNotifier extends StateNotifier<List<Nilai>> {
   }
 }
 
-/// Computed: Total score for an athlete (only counting SAH points, matching by DocId, Id, or Corner)
+/// Computed: Total score for an athlete (only counting SAH points for current match/jadwal)
 int countNilaiForPeserta(
   List<Nilai> allNilai,
   String pesertaDocId, {
   String? sudut,
+  String? jadwalDocId,
+  String? jadwalId,
 }) {
   if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) return 0;
+  final hasJadwal = (jadwalDocId != null && jadwalDocId.isNotEmpty) ||
+      (jadwalId != null && jadwalId.isNotEmpty);
+
   return allNilai
       .where((n) {
         if (!n.isSah) return false;
+
+        // 1. Strict Jadwal filter if provided
+        if (hasJadwal) {
+          final nDoc = n.jadwalDocId;
+          final nId = n.jadwalId;
+          final hasRef = (nDoc != null && nDoc.isNotEmpty) ||
+              (nId != null && nId.isNotEmpty);
+          if (hasRef) {
+            final matchDoc = jadwalDocId != null &&
+                jadwalDocId.isNotEmpty &&
+                (nDoc == jadwalDocId || nId == jadwalDocId);
+            final matchId = jadwalId != null &&
+                jadwalId.isNotEmpty &&
+                (nId == jadwalId || nDoc == jadwalId);
+            if (!matchDoc && !matchId) return false;
+          }
+        }
+
+        // 2. Athlete ID & Sudut filter
         final doc = n.peserta?.documentId;
         final id = n.peserta?.id?.toString();
+        final hasPeserta =
+            (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+
         final matchesId = pesertaDocId.isNotEmpty &&
             ((doc != null && doc == pesertaDocId) ||
                 (id != null && id == pesertaDocId));
         final matchesSudut = (sudut != null &&
             sudut.isNotEmpty &&
             n.sudut?.toLowerCase() == sudut.toLowerCase());
-        return matchesId || matchesSudut;
+
+        if (hasPeserta) {
+          if (!matchesId) return false;
+          if (sudut != null &&
+              sudut.isNotEmpty &&
+              n.sudut != null &&
+              n.sudut!.isNotEmpty) {
+            if (n.sudut!.toLowerCase() != sudut.toLowerCase()) return false;
+          }
+          return true;
+        }
+
+        return matchesSudut;
       })
       .fold(0, (sum, n) => sum + (n.jumlah ?? 0));
 }
 
-/// Computed: Recent scores for an athlete (latest first)
+/// Computed: Recent scores for an athlete (latest first, filtered by current match/jadwal)
 List<Nilai> recentNilaiForPeserta(
   List<Nilai> allNilai,
   String pesertaDocId, {
   int limit = 5,
   String? sudut,
+  String? jadwalDocId,
+  String? jadwalId,
 }) {
   if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) return [];
+  final hasJadwal = (jadwalDocId != null && jadwalDocId.isNotEmpty) ||
+      (jadwalId != null && jadwalId.isNotEmpty);
+
   final filtered = allNilai.where((n) {
     if (!n.isSah) return false;
+
+    // 1. Strict Jadwal filter if provided
+    if (hasJadwal) {
+      final nDoc = n.jadwalDocId;
+      final nId = n.jadwalId;
+      final hasRef = (nDoc != null && nDoc.isNotEmpty) ||
+          (nId != null && nId.isNotEmpty);
+      if (hasRef) {
+        final matchDoc = jadwalDocId != null &&
+            jadwalDocId.isNotEmpty &&
+            (nDoc == jadwalDocId || nId == jadwalDocId);
+        final matchId = jadwalId != null &&
+            jadwalId.isNotEmpty &&
+            (nId == jadwalId || nDoc == jadwalId);
+        if (!matchDoc && !matchId) return false;
+      }
+    }
+
+    // 2. Athlete ID & Sudut filter
     final doc = n.peserta?.documentId;
     final id = n.peserta?.id?.toString();
+    final hasPeserta =
+        (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+
     final matchesId = pesertaDocId.isNotEmpty &&
         ((doc != null && doc == pesertaDocId) ||
             (id != null && id == pesertaDocId));
     final matchesSudut = (sudut != null &&
         sudut.isNotEmpty &&
         n.sudut?.toLowerCase() == sudut.toLowerCase());
-    return matchesId || matchesSudut;
+
+    if (hasPeserta) {
+      if (!matchesId) return false;
+      if (sudut != null &&
+          sudut.isNotEmpty &&
+          n.sudut != null &&
+          n.sudut!.isNotEmpty) {
+        if (n.sudut!.toLowerCase() != sudut.toLowerCase()) return false;
+      }
+      return true;
+    }
+
+    return matchesSudut;
   }).toList();
+
   filtered.sort((a, b) {
     final aTime = a.createdAt ?? DateTime(2000);
     final bTime = b.createdAt ?? DateTime(2000);
@@ -362,25 +449,61 @@ MatchStats computeMatchStats(
   List<Nilai> allNilai,
   String pesertaDocId, {
   String? sudut,
+  String? jadwalDocId,
+  String? jadwalId,
 }) {
   if (pesertaDocId.isEmpty && (sudut == null || sudut.isEmpty)) {
     return const MatchStats();
   }
+  final hasJadwal = (jadwalDocId != null && jadwalDocId.isNotEmpty) ||
+      (jadwalId != null && jadwalId.isNotEmpty);
 
   int nilai = 0, pukulan = 0, tendangan = 0, jatuhan = 0;
   int binaan = 0, teguran = 0, peringatan = 0;
 
   for (final n in allNilai) {
     if (!n.isSah) continue;
+
+    // 1. Strict Jadwal filter if provided
+    if (hasJadwal) {
+      final nDoc = n.jadwalDocId;
+      final nId = n.jadwalId;
+      final hasRef = (nDoc != null && nDoc.isNotEmpty) ||
+          (nId != null && nId.isNotEmpty);
+      if (hasRef) {
+        final matchDoc = jadwalDocId != null &&
+            jadwalDocId.isNotEmpty &&
+            (nDoc == jadwalDocId || nId == jadwalDocId);
+        final matchId = jadwalId != null &&
+            jadwalId.isNotEmpty &&
+            (nId == jadwalId || nDoc == jadwalId);
+        if (!matchDoc && !matchId) continue;
+      }
+    }
+
     final doc = n.peserta?.documentId;
     final id = n.peserta?.id?.toString();
+    final hasPeserta =
+        (doc != null && doc.isNotEmpty) || (id != null && id.isNotEmpty);
+
     final matchesId = pesertaDocId.isNotEmpty &&
         ((doc != null && doc == pesertaDocId) ||
             (id != null && id == pesertaDocId));
     final matchesSudut = (sudut != null &&
         sudut.isNotEmpty &&
         n.sudut?.toLowerCase() == sudut.toLowerCase());
-    if (!matchesId && !matchesSudut) continue;
+
+    if (hasPeserta) {
+      if (!matchesId) continue;
+      if (sudut != null &&
+          sudut.isNotEmpty &&
+          n.sudut != null &&
+          n.sudut!.isNotEmpty) {
+        if (n.sudut!.toLowerCase() != sudut.toLowerCase()) continue;
+      }
+    } else {
+      if (!matchesSudut) continue;
+    }
 
     final jenis = (n.jenis ?? '').toLowerCase();
     final jumlah = n.jumlah ?? 0;

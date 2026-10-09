@@ -782,10 +782,36 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
       // 4. Cek apakah skor SERI → Dewan wajib menentukan pemenang
       final allNilai = ref.read(nilaiListProvider);
-      final statsBiru = computeMatchStats(allNilai, biruId, sudut: 'biru');
-      final statsMerah = computeMatchStats(allNilai, merahId, sudut: 'merah');
-      final skorBiru = countNilaiForPeserta(allNilai, biruId, sudut: 'biru');
-      final skorMerah = countNilaiForPeserta(allNilai, merahId, sudut: 'merah');
+      final jDocId = _selectedJadwal?.documentId ?? '';
+      final jId = _selectedJadwal?.id?.toString() ?? '';
+      final statsBiru = computeMatchStats(
+        allNilai,
+        biruId,
+        sudut: 'biru',
+        jadwalDocId: jDocId,
+        jadwalId: jId,
+      );
+      final statsMerah = computeMatchStats(
+        allNilai,
+        merahId,
+        sudut: 'merah',
+        jadwalDocId: jDocId,
+        jadwalId: jId,
+      );
+      final skorBiru = countNilaiForPeserta(
+        allNilai,
+        biruId,
+        sudut: 'biru',
+        jadwalDocId: jDocId,
+        jadwalId: jId,
+      );
+      final skorMerah = countNilaiForPeserta(
+        allNilai,
+        merahId,
+        sudut: 'merah',
+        jadwalDocId: jDocId,
+        jadwalId: jId,
+      );
       final isSeri = skorBiru == skorMerah;
 
       // 5. Emit timer:control stop event so Monitor & Juri screens trigger instantly
@@ -2624,15 +2650,21 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
     final atlitMerahDocId =
         _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final jDocId = _selectedJadwal?.documentId ?? '';
+    final jId = _selectedJadwal?.id?.toString() ?? '';
     final totalSkorBiru = countNilaiForPeserta(
       allNilai,
       atlitBiruDocId,
       sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
     final totalSkorMerah = countNilaiForPeserta(
       allNilai,
       atlitMerahDocId,
       sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
 
     // Get 5 latest score logs for each athlete
@@ -2641,12 +2673,16 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       atlitBiruDocId,
       limit: 5,
       sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
     final historyMerah = recentNilaiForPeserta(
       allNilai,
       atlitMerahDocId,
       limit: 5,
       sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
 
     return Scaffold(
