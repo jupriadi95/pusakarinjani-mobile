@@ -197,6 +197,24 @@ class SocketService {
       }
     });
 
+    _socket!.on('juri:vote', (data) {
+      debugPrint('[Socket] juri:vote received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriVoteBufferedController.add(data);
+      } else if (data is Map) {
+        _juriVoteBufferedController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('juri:tekan', (data) {
+      debugPrint('[Socket] juri:tekan received: $data');
+      if (data is Map<String, dynamic>) {
+        _juriVoteBufferedController.add(data);
+      } else if (data is Map) {
+        _juriVoteBufferedController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
     _socket!.on('juri:vote:confirm', (data) {
       debugPrint('[Socket] juri:vote:confirm received: $data');
       if (data is Map<String, dynamic>) {
@@ -340,6 +358,16 @@ class SocketService {
       debugPrint('[Socket] Emitted juri:vote -> $payload');
     } else {
       debugPrint('[Socket] Cannot emit juri:vote: not connected');
+    }
+  }
+
+  /// Emit jury button press event directly to room for Dewan indicator lights
+  void emitJuriTekan(Map<String, dynamic> payload) {
+    if (_socket != null && _isConnected) {
+      _socket!.emit('juri:tekan', payload);
+      debugPrint('[Socket] Emitted juri:tekan -> $payload');
+    } else {
+      debugPrint('[Socket] Cannot emit juri:tekan: not connected');
     }
   }
 

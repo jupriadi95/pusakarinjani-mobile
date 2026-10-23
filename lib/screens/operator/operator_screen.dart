@@ -78,6 +78,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   bool _juri2Ready = false;
   bool _juri3Ready = false;
 
+  // ── Indikator Tekan Tombol Juri (visual only, tidak mempengaruhi penilaian) ──
+  // Key format: '$sudut|$jenis|$juriNum'  contoh: 'biru|tendangan|1'
+  static const Duration _juriTekanLampDuration = Duration(milliseconds: 1000);
+  StreamSubscription? _juriVoteBufferedSub;
+  final Set<String> _juriTekanLit = {};
+  final Map<String, Timer> _juriTekanTimers = {};
+
   // ── Buzzer State ──
   final AudioPlayer _buzzerPlayer = AudioPlayer();
   int _buzzerCountdown = 0;
@@ -325,6 +332,79 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         if (juriId == 'juri_2' || juriId == '2') _juri2Ready = isReady;
         if (juriId == 'juri_3' || juriId == '3') _juri3Ready = isReady;
       });
+    });
+
+    // ── Indikator Tekan Tombol Juri (pukul / tendang) ──
+    // Hanya untuk tampilan: menyalakan lampu juri setiap kali tombol ditekan,
+    // terlepas dari apakah nilai akhirnya sah atau tidak.
+    _juriVoteBufferedSub = _socketService.onJuriVoteBuffered.listen(
+      _handleJuriTekan,
+    );
+  }
+
+  /// Parse event juri:vote:buffered lalu nyalakan lampu indikator terkait.
+  void _handleJuriTekan(Map<String, dynamic> raw) {
+    if (!mounted) return;
+    // Dukung payload datar maupun bersarang (mis. { vote: {...} }, { data: {...} }, { payload: {...} })
+    final Map<String, dynamic> data = raw['vote'] is Map
+        ? Map<String, dynamic>.from(raw['vote'] as Map)
+        : raw['data'] is Map
+        ? Map<String, dynamic>.from(raw['data'] as Map)
+        : raw['payload'] is Map
+        ? Map<String, dynamic>.from(raw['payload'] as Map)
+        : raw;
+
+    // Abaikan event dari gelanggang lain bila gelanggangId disertakan
+    final evGelanggang = (data['gelanggangId'] ??
+            raw['gelanggangId'] ??
+            data['gelanggang_id'] ??
+            raw['gelanggang_id'])
+        ?.toString();
+    final currentGelanggang = ref.read(activeGelanggangProvider);
+    final myDocId = currentGelanggang?.documentId;
+    final myId = currentGelanggang?.id?.toString();
+    if (evGelanggang != null && evGelanggang.isNotEmpty) {
+      final matches = (myDocId != null && evGelanggang == myDocId) ||
+          (myId != null && evGelanggang == myId);
+      if (!matches && (myDocId != null || myId != null)) {
+        return;
+      }
+    }
+
+    final juriRaw = (data['juriId'] ?? data['juri_id'] ?? data['juri'] ?? '')
+        .toString();
+    final juriNum = RegExp(r'\d+').firstMatch(juriRaw)?.group(0);
+    final sudutRaw = (data['sudut'] ?? '').toString().toLowerCase();
+    final sudut = (sudutRaw.contains('merah') || sudutRaw.contains('red'))
+        ? 'merah'
+        : (sudutRaw.contains('biru') || sudutRaw.contains('blue'))
+        ? 'biru'
+        : '';
+    final jenisRaw = (data['jenis'] ?? data['aksi'] ?? '')
+        .toString()
+        .toLowerCase();
+    final jenis = jenisRaw.contains('pukul')
+        ? 'pukulan'
+        : jenisRaw.contains('tendang')
+        ? 'tendangan'
+        : null;
+
+    if (juriNum == null ||
+        !['1', '2', '3'].contains(juriNum) ||
+        (sudut != 'biru' && sudut != 'merah') ||
+        jenis == null) {
+      debugPrint('[Dewan] juri:vote/juri:tekan event tidak lengkap, dilewati: $raw');
+      return;
+    }
+
+    final key = '$sudut|$jenis|$juriNum';
+    debugPrint('[Dewan] Indikator Juri LIT: $key (lampu menyala)');
+    _juriTekanTimers[key]?.cancel();
+    setState(() => _juriTekanLit.add(key));
+    _juriTekanTimers[key] = Timer(_juriTekanLampDuration, () {
+      if (!mounted) return;
+      setState(() => _juriTekanLit.remove(key));
+      _juriTekanTimers.remove(key);
     });
   }
 
@@ -722,99 +802,51 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
   }
 
   Future<void> _handleStop() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: PusakaTheme.slate900,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Selesai Tanding?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        content: const Text(
-          'Apakah Anda yakin ingin menyelesaikan pertandingan partai ini?',
-          style: TextStyle(color: PusakaTheme.slate400),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: PusakaTheme.slate400),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: PusakaTheme.rose600,
-            ),
-            child: const Text('Ya, Selesaikan'),
-          ),
-        ],
-      ),
+    final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
+    final merahId =
+        _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final jDocId = _selectedJadwal?.documentId ?? '';
+    final jId = _selectedJadwal?.id?.toString() ?? '';
+    final allNilai = ref.read(nilaiListProvider);
+
+    final skorBiru = countNilaiForPeserta(
+      allNilai,
+      biruId,
+      sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
+    final skorMerah = countNilaiForPeserta(
+      allNilai,
+      merahId,
+      sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
     );
 
-    if (confirm == true) {
-      final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-      final merahId =
-          _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
+    final isSeri = skorBiru == skorMerah;
 
-      // 1. Update gelanggang status to 'standby' in Strapi (valid enum: standby, berlangsung, tutup)
-      await _updateGelanggang('standby', biruId, merahId);
+    final statsBiru = computeMatchStats(
+      allNilai,
+      biruId,
+      sudut: 'biru',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
+    final statsMerah = computeMatchStats(
+      allNilai,
+      merahId,
+      sudut: 'merah',
+      jadwalDocId: jDocId,
+      jadwalId: jId,
+    );
 
-      // 2. If a specific jadwal match is active, update jadwal status to 'selesai' in Strapi
-      if (_selectedJadwal?.documentId != null &&
-          _selectedJadwal!.documentId!.isNotEmpty) {
-        try {
-          await _api.updateProtect('jadwals', _selectedJadwal!.documentId!, {
-            'data': {'status': 'selesai'},
-          });
-        } catch (e) {
-          debugPrint('[Dewan] Error updating jadwal status: $e');
-        }
-      }
-
-      // 3. Update local state & stop timer
+    // Jika skor SERI: stop timer & pancarkan ke monitor agar layar monitor langsung menampilkan modal statistik nilai seri seperti semula
+    if (isSeri) {
       setState(() {
         _tandingStatus = false;
         _pauseTimer();
       });
-
-      // 4. Cek apakah skor SERI → Dewan wajib menentukan pemenang
-      final allNilai = ref.read(nilaiListProvider);
-      final jDocId = _selectedJadwal?.documentId ?? '';
-      final jId = _selectedJadwal?.id?.toString() ?? '';
-      final statsBiru = computeMatchStats(
-        allNilai,
-        biruId,
-        sudut: 'biru',
-        jadwalDocId: jDocId,
-        jadwalId: jId,
-      );
-      final statsMerah = computeMatchStats(
-        allNilai,
-        merahId,
-        sudut: 'merah',
-        jadwalDocId: jDocId,
-        jadwalId: jId,
-      );
-      final skorBiru = countNilaiForPeserta(
-        allNilai,
-        biruId,
-        sudut: 'biru',
-        jadwalDocId: jDocId,
-        jadwalId: jId,
-      );
-      final skorMerah = countNilaiForPeserta(
-        allNilai,
-        merahId,
-        sudut: 'merah',
-        jadwalDocId: jDocId,
-        jadwalId: jId,
-      );
-      final isSeri = skorBiru == skorMerah;
-
-      // 5. Emit timer:control stop event so Monitor & Juri screens trigger instantly
       final gelanggangId = ref.read(activeGelanggangProvider)?.documentId ?? '';
       _socketService.emitTimerControl({
         'action': 'stop',
@@ -823,108 +855,191 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'status': 'selesai',
         'atlit1Id': biruId,
         'atlit2Id': merahId,
-        if (isSeri) 'seri': true,
+        'seri': true,
       });
+      _showSnack(
+        'Skor SERI! Statistik nilai ditampilkan, silakan tentukan pemenang.',
+        PusakaTheme.amber500,
+      );
+    }
 
-      if (isSeri) {
-        _showSnack(
-          'Skor SERI! Silakan tentukan pemenang.',
-          PusakaTheme.amber500,
-        );
-        await _showSeriDialog(statsBiru, statsMerah);
-      } else {
-        _showSnack(
-          'Pertandingan Selesai! Pemenang Ditampilkan di Layar Monitor.',
-          PusakaTheme.emerald600,
-        );
+    // Default sudut pemenang berdasarkan skor saat ini
+    final defaultSudut = skorBiru >= skorMerah ? 'biru' : 'merah';
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _SelesaikanPertandinganDialog(
+        biruName: _atlitBiru?.namaLengkap ?? 'Sudut Biru',
+        merahName: _atlitMerah?.namaLengkap ?? 'Sudut Merah',
+        biruKontingen: _atlitBiru?.kontingen ?? '-',
+        merahKontingen: _atlitMerah?.kontingen ?? '-',
+        skorBiru: skorBiru,
+        skorMerah: skorMerah,
+        defaultSudut: defaultSudut,
+        nomorPartai: _selectedJadwal?.nomorPartai?.toString(),
+        namaKelas: _selectedJadwal?.kelas?.namaKelas,
+        babak: _selectedJadwal?.babak ?? _activeBabak,
+        statsBiru: statsBiru,
+        statsMerah: statsMerah,
+        onShowSeriDialog: () => _showSeriDialog(statsBiru, statsMerah),
+      ),
+    );
+
+    if (result == null) return;
+
+    final pemenangSudut = result['sudut']!;
+    final kodeKemenangan = result['kode']!;
+    final jenisKemenangan = result['label']!;
+    final pemenangId = pemenangSudut == 'biru' ? biruId : merahId;
+
+    // 1. Update gelanggang status to 'standby' in Strapi
+    await _updateGelanggang('standby', biruId, merahId);
+
+    // 2. If a specific jadwal match is active, update jadwal status to 'selesai' with pemenang & keterangan
+    if (_selectedJadwal?.documentId != null &&
+        _selectedJadwal!.documentId!.isNotEmpty) {
+      try {
+        await _api.updateProtect('jadwals', _selectedJadwal!.documentId!, {
+          'data': {
+            'status': 'selesai',
+            'pemenang': pemenangId,
+            'keterangan': '$kodeKemenangan - $jenisKemenangan',
+          },
+        });
+      } catch (e) {
+        debugPrint('[Dewan] Error updating jadwal status: $e');
       }
     }
+
+    // 3. Update local state & stop timer
+    setState(() {
+      _tandingStatus = false;
+      _pauseTimer();
+    });
+
+    // 4. Emit timer:control and pertandingan:selesai events with complete winner & victory type
+    final gelanggangId = ref.read(activeGelanggangProvider)?.documentId ?? '';
+    final jadwalDocId = _selectedJadwal?.documentId ?? '';
+
+    final payload = {
+      'action': 'stop',
+      'seconds': _timerSeconds,
+      'gelanggangId': gelanggangId,
+      'jadwalId': jadwalDocId,
+      'status': 'selesai',
+      'atlit1Id': biruId,
+      'atlit2Id': merahId,
+      'pemenang': pemenangSudut,
+      'kodeKemenangan': kodeKemenangan,
+      'jenisKemenangan': jenisKemenangan,
+      'kemenangan': '$kodeKemenangan - $jenisKemenangan',
+    };
+
+    _socketService.emitTimerControl(payload);
+    _socketService.emitPertandinganSelesai(payload);
+
+    _showSnack(
+      'Pertandingan Selesai! Pemenang: SUDUT ${pemenangSudut.toUpperCase()} ($kodeKemenangan - $jenisKemenangan)',
+      PusakaTheme.emerald600,
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
   // ── SKOR SERI: POPUP KEPUTUSAN DEWAN ──
   // ══════════════════════════════════════════════════════════════════════════
-  Future<void> _showSeriDialog(MatchStats biru, MatchStats merah) async {
+  Future<String?> _showSeriDialog(MatchStats biru, MatchStats merah) async {
     final biruName = _atlitBiru?.namaLengkap ?? 'Sudut Biru';
     final merahName = _atlitMerah?.namaLengkap ?? 'Sudut Merah';
 
     final pemenang = await showDialog<String>(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: Dialog(
-          backgroundColor: PusakaTheme.slate950,
-          insetPadding: const EdgeInsets.all(24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-            side: const BorderSide(color: Color(0xFFFBBF24), width: 2),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(22),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.balance_rounded,
-                    color: Color(0xFFFBBF24),
-                    size: 40,
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'SKOR SERI — KEPUTUSAN DEWAN',
-                    style: TextStyle(
-                      color: Color(0xFFFBBF24),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: PusakaTheme.slate950,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const SizedBox(width: 40),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.balance_rounded,
+                          color: Color(0xFFFBBF24),
+                          size: 32,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'SKOR SERI — KEPUTUSAN DEWAN',
+                          style: TextStyle(
+                            color: Color(0xFFFBBF24),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Bandingkan statistik kedua peserta lalu pilih pemenang.',
-                    style: TextStyle(color: PusakaTheme.slate400, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSeriStatsTable(biruName, merahName, biru, merah),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildPilihPemenangButton(
-                          ctx,
-                          label: 'MENANGKAN BIRU',
-                          sudut: 'biru',
-                          color: const Color(0xFF0284C7),
-                        ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx, null),
+                      icon: const Icon(Icons.close, color: PusakaTheme.slate400),
+                      tooltip: 'Tutup',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Bandingkan statistik kedua peserta lalu pilih pemenang.',
+                  style: TextStyle(color: PusakaTheme.slate400, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                buildSeriStatsTable(biruName, merahName, biru, merah),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildPilihPemenangButton(
+                        ctx,
+                        label: 'PILIH SUDUT BIRU',
+                        sudut: 'biru',
+                        color: const Color(0xFF0284C7),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildPilihPemenangButton(
-                          ctx,
-                          label: 'MENANGKAN MERAH',
-                          sudut: 'merah',
-                          color: const Color(0xFFE11D48),
-                        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildPilihPemenangButton(
+                        ctx,
+                        label: 'PILIH SUDUT MERAH',
+                        sudut: 'merah',
+                        color: const Color(0xFFE11D48),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    if (pemenang != null) {
-      await _handlePilihPemenang(pemenang);
-    }
+    return pemenang;
   }
 
-  Widget _buildSeriStatsTable(
+  static Widget buildSeriStatsTable(
     String biruName,
     String merahName,
     MatchStats biru,
@@ -1095,50 +1210,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     );
   }
 
-  /// Broadcast keputusan Dewan (pemenang saat skor seri) ke Monitor & simpan ke Strapi.
-  Future<void> _handlePilihPemenang(String sudut) async {
-    final gelanggangId = ref.read(activeGelanggangProvider)?.documentId ?? '';
-    final jadwalDocId = _selectedJadwal?.documentId ?? '';
-    final biruId = _atlitBiru?.documentId ?? _atlitBiru?.id?.toString() ?? '';
-    final merahId =
-        _atlitMerah?.documentId ?? _atlitMerah?.id?.toString() ?? '';
-    final pemenangId = sudut == 'biru' ? biruId : merahId;
-
-    _socketService.emitPertandinganSelesai({
-      'gelanggangId': gelanggangId,
-      'jadwalId': jadwalDocId,
-      'pemenang': sudut,
-      'kemenangan': 'keputusan_dewan',
-    });
-    // Backup channel agar Monitor pasti menerima keputusan
-    _socketService.emitTimerControl({
-      'action': 'stop',
-      'seconds': _timerSeconds,
-      'gelanggangId': gelanggangId,
-      'status': 'selesai',
-      'atlit1Id': biruId,
-      'atlit2Id': merahId,
-      'pemenang': sudut,
-      'kemenangan': 'keputusan_dewan',
-    });
-
-    if (jadwalDocId.isNotEmpty && pemenangId.isNotEmpty) {
-      try {
-        await _api.updateProtect('jadwals', jadwalDocId, {
-          'data': {'pemenang': pemenangId},
-        });
-      } catch (e) {
-        debugPrint('[Dewan] Error saving pemenang to Strapi: $e');
-      }
-    }
-
-    _showSnack(
-      'Pemenang: SUDUT ${sudut.toUpperCase()} (Keputusan Dewan) ditampilkan di Monitor.',
-      PusakaTheme.emerald600,
-    );
-  }
-
-
+  /// Emit KP Action via Socket.IO AND Persist Directly to Strapi Database
   /// Emit KP Action via Socket.IO AND Persist Directly to Strapi Database
   DateTime? _lastKpActionTime;
 
@@ -1333,6 +1405,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'status': 'selesai',
         'atlit1Id': biruId,
         'atlit2Id': merahId,
+        'pemenang': isRed ? 'biru' : 'merah',
+        'kodeKemenangan': 'DQ',
+        'jenisKemenangan': 'Menang Diskualifikasi',
+        'kemenangan': 'DQ - Menang Diskualifikasi',
         'dsqSudut': isRed ? 'merah' : 'biru',
         'dsqNama': atlit?.namaLengkap ?? '',
       });
@@ -1341,7 +1417,9 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
         'gelanggangId': gelanggangId,
         'jadwalId': jadwalDocId,
         'pemenang': isRed ? 'biru' : 'merah',
-        'kemenangan': 'diskualifikasi',
+        'kodeKemenangan': 'DQ',
+        'jenisKemenangan': 'Menang Diskualifikasi',
+        'kemenangan': 'DQ - Menang Diskualifikasi',
         'dsqSudut': isRed ? 'merah' : 'biru',
         'dsqNama': atlit?.namaLengkap ?? '',
       });
@@ -2591,6 +2669,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     _timerControlSub?.cancel();
     _babakChangedSub?.cancel();
     _juriReadySub?.cancel();
+    _juriVoteBufferedSub?.cancel();
+    for (final t in _juriTekanTimers.values) {
+      t.cancel();
+    }
+    _juriTekanTimers.clear();
     // Do NOT call _socketService.disconnect() — socket is a shared singleton via Riverpod provider
     // Restore orientation
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -3766,13 +3849,25 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                 const SizedBox(height: 6),
 
-                // ── Vertical Log Nilai Masuk (Biru - 5 Latest) ──
+                // ── Vertical Log Nilai Masuk (Biru - 5 Latest) + Indikator Juri (kanan) ──
                 Expanded(
                   flex: 2,
-                  child: _buildVerticalLogNilaiSection(
-                    'LOG NILAI MASUK (BIRU):',
-                    history,
-                    const Color(0xFF38BDF8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildVerticalLogNilaiSection(
+                          'LOG NILAI MASUK (BIRU):',
+                          history,
+                          const Color(0xFF38BDF8),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildJuriTekanIndicator(
+                        'biru',
+                        const Color(0xFF38BDF8),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -4137,13 +4232,25 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
                 const SizedBox(height: 6),
 
-                // ── Vertical Log Nilai Masuk (Merah - 5 Latest) ──
+                // ── Vertical Log Nilai Masuk (Merah - 5 Latest) + Indikator Juri (kiri) ──
                 Expanded(
                   flex: 2,
-                  child: _buildVerticalLogNilaiSection(
-                    'LOG NILAI MASUK (MERAH):',
-                    history,
-                    const Color(0xFFFB7185),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildJuriTekanIndicator(
+                        'merah',
+                        const Color(0xFFFB7185),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _buildVerticalLogNilaiSection(
+                          'LOG NILAI MASUK (MERAH):',
+                          history,
+                          const Color(0xFFFB7185),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -4168,24 +4275,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── App/Event Logo Above Timer Box (70% Width) ──
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 6.0),
-              child: FractionallySizedBox(
-                widthFactor: 0.50,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    'assets/img/logo-small.webp',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const SizedBox.shrink(),
-                  ),
-                ),
-              ),
-            ),
-          ),
+
 
           // ── Digital Timer Box ──
           Container(
@@ -4792,6 +4882,140 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     );
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // ── INDIKATOR TEKAN TOMBOL JURI (PUKUL / TENDANG × JURI 1-3) ──
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildJuriTekanIndicator(String sudut, Color accent) {
+    return Container(
+      width: 88,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF030712).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withValues(alpha: 0.45), width: 1.2),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _buildJuriTekanColumn(
+              sudut: sudut,
+              jenis: 'pukulan',
+              icon: Icons.sports_mma_rounded,
+              label: 'PUKUL',
+              accent: accent,
+            ),
+          ),
+          Container(
+            width: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            color: const Color(0xFF1E293B),
+          ),
+          Expanded(
+            child: _buildJuriTekanColumn(
+              sudut: sudut,
+              jenis: 'tendangan',
+              icon: Icons.sports_martial_arts_rounded,
+              label: 'TENDANG',
+              accent: accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJuriTekanColumn({
+    required String sudut,
+    required String jenis,
+    required IconData icon,
+    required String label,
+    required Color accent,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: accent, size: 20),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: accent,
+              fontSize: 8,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (final n in const ['1', '2', '3'])
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _buildJuriLamp(
+                      juriNum: n,
+                      isLit: _juriTekanLit.contains('$sudut|$jenis|$n'),
+                      accent: accent,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJuriLamp({
+    required String juriNum,
+    required bool isLit,
+    required Color accent,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 60),
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: isLit
+                ? RadialGradient(colors: [Colors.white, accent])
+                : null,
+            color: isLit ? null : const Color(0xFF1E293B),
+            border: Border.all(
+              color: isLit ? Colors.white : const Color(0xFF334155),
+              width: 1.2,
+            ),
+            boxShadow: isLit
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.9),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'J$juriNum',
+          style: TextStyle(
+            color: isLit ? Colors.white : const Color(0xFF64748B),
+            fontSize: 8.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Vertical List displaying the 5 latest score logs
   Widget _buildVerticalLogNilaiSection(
     String title,
@@ -4997,3 +5221,561 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── MODAL DIALOG: SELESAIKAN PERTANDINGAN (DEWAN PERTANDINGAN) ──
+// ══════════════════════════════════════════════════════════════════════════════
+class _SelesaikanPertandinganDialog extends StatefulWidget {
+  final String biruName;
+  final String merahName;
+  final String biruKontingen;
+  final String merahKontingen;
+  final int skorBiru;
+  final int skorMerah;
+  final String defaultSudut;
+  final String? nomorPartai;
+  final String? namaKelas;
+  final String? babak;
+  final MatchStats? statsBiru;
+  final MatchStats? statsMerah;
+  final Future<String?> Function()? onShowSeriDialog;
+
+  const _SelesaikanPertandinganDialog({
+    required this.biruName,
+    required this.merahName,
+    required this.biruKontingen,
+    required this.merahKontingen,
+    required this.skorBiru,
+    required this.skorMerah,
+    required this.defaultSudut,
+    this.nomorPartai,
+    this.namaKelas,
+    this.babak,
+    this.statsBiru,
+    this.statsMerah,
+    this.onShowSeriDialog,
+  });
+
+  @override
+  State<_SelesaikanPertandinganDialog> createState() =>
+      _SelesaikanPertandinganDialogState();
+}
+
+class _SelesaikanPertandinganDialogState
+    extends State<_SelesaikanPertandinganDialog> {
+  late String _selectedSudut;
+  String _selectedKode = 'MN';
+
+  static const List<Map<String, String>> _kemenanganOptions = [
+    {'code': 'MN', 'label': 'Menang Angka'},
+    {'code': 'MT', 'label': 'Menang Teknik'},
+    {'code': 'MM', 'label': 'Menang Mutlak'},
+    {'code': 'WMP', 'label': 'Wasit Menghentikan Pertandingan'},
+    {'code': 'UD / WO', 'label': 'Menang Undur Diri'},
+    {'code': 'DQ', 'label': 'Menang Diskualifikasi'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSudut = widget.defaultSudut;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: PusakaTheme.slate950,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFF334155), width: 1.5),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Header ──
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFBBF24),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.military_tech_rounded,
+                      color: Color(0xFFFBBF24),
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'SELESAIKAN PERTANDINGAN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Partai ${widget.nomorPartai ?? "-"} • Kelas ${widget.namaKelas ?? "-"} • Babak ${widget.babak ?? "-"}',
+                          style: const TextStyle(
+                            color: PusakaTheme.slate400,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context, null),
+                    icon: const Icon(Icons.close, color: PusakaTheme.slate400),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: PusakaTheme.slate800, height: 1),
+              const SizedBox(height: 16),
+
+              // ── Section 1: Tentukan Sudut Pemenang ──
+              const Row(
+                children: [
+                  Icon(Icons.emoji_events_rounded,
+                      size: 16, color: Color(0xFF38BDF8)),
+                  SizedBox(width: 6),
+                  Text(
+                    '1. TENTUKAN SUDUT PEMENANG',
+                    style: TextStyle(
+                      color: Color(0xFF38BDF8),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Pilih salah satu sudut sebagai pemenang partai ini:',
+                style: TextStyle(color: PusakaTheme.slate400, fontSize: 11.5),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSudutCard(
+                      sudut: 'biru',
+                      label: 'SUDUT BIRU',
+                      name: widget.biruName,
+                      kontingen: widget.biruKontingen,
+                      skor: widget.skorBiru,
+                      isSelected: _selectedSudut == 'biru',
+                      accentColor: const Color(0xFF0284C7),
+                      borderColor: const Color(0xFF38BDF8),
+                      onTap: () => setState(() => _selectedSudut = 'biru'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSudutCard(
+                      sudut: 'merah',
+                      label: 'SUDUT MERAH',
+                      name: widget.merahName,
+                      kontingen: widget.merahKontingen,
+                      skor: widget.skorMerah,
+                      isSelected: _selectedSudut == 'merah',
+                      accentColor: const Color(0xFFE11D48),
+                      borderColor: const Color(0xFFFB7185),
+                      onTap: () => setState(() => _selectedSudut = 'merah'),
+                    ),
+                  ),
+                ],
+              ),
+
+              if (widget.skorBiru == widget.skorMerah) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF78350F).withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFBBF24),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.balance_rounded,
+                          color: Color(0xFFFBBF24), size: 24),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SKOR SERI — PERBANDINGAN STATISTIK TEKNIK',
+                              style: TextStyle(
+                                color: Color(0xFFFBBF24),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Bandingkan kriteria teknik di bawah ini untuk menentukan sudut pemenang:',
+                              style: TextStyle(
+                                color: Color(0xFFFDE68A),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.statsBiru != null && widget.statsMerah != null) ...[
+                  const SizedBox(height: 10),
+                  _OperatorScreenState.buildSeriStatsTable(
+                    widget.biruName,
+                    widget.merahName,
+                    widget.statsBiru!,
+                    widget.statsMerah!,
+                  ),
+                ],
+              ],
+
+              const SizedBox(height: 20),
+              const Divider(color: PusakaTheme.slate800, height: 1),
+              const SizedBox(height: 16),
+
+              // ── Section 2: Pilih Jenis Kemenangan ──
+              const Row(
+                children: [
+                  Icon(Icons.workspace_premium_rounded,
+                      size: 16, color: Color(0xFFFBBF24)),
+                  SizedBox(width: 6),
+                  Text(
+                    '2. PILIH JENIS KEMENANGAN',
+                    style: TextStyle(
+                      color: Color(0xFFFBBF24),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Pilih salah satu jenis kemenangan (tombol aktif / non-aktif):',
+                style: TextStyle(color: PusakaTheme.slate400, fontSize: 11.5),
+              ),
+              const SizedBox(height: 12),
+
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final itemWidth = (constraints.maxWidth - 10) / 2;
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _kemenanganOptions.map((item) {
+                      return SizedBox(
+                        width: itemWidth,
+                        child: _buildKemenanganButton(item),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 24),
+              const Divider(color: PusakaTheme.slate800, height: 1),
+              const SizedBox(height: 16),
+
+              // ── Action Buttons ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context, null),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF475569)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(
+                        color: PusakaTheme.slate300,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      final opt = _kemenanganOptions.firstWhere(
+                        (e) => e['code'] == _selectedKode,
+                        orElse: () => {
+                          'code': _selectedKode,
+                          'label': _selectedKode,
+                        },
+                      );
+                      Navigator.pop(context, {
+                        'sudut': _selectedSudut,
+                        'kode': _selectedKode,
+                        'label': opt['label']!,
+                      });
+                    },
+                    icon: const Icon(Icons.check_circle_rounded, size: 20),
+                    label: const Text(
+                      'Selesaikan Pertandingan',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: PusakaTheme.rose600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 4,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSudutCard({
+    required String sudut,
+    required String label,
+    required String name,
+    required String kontingen,
+    required int skor,
+    required bool isSelected,
+    required Color accentColor,
+    required Color borderColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? accentColor.withValues(alpha: 0.18)
+              : PusakaTheme.slate900,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? borderColor : const Color(0xFF334155),
+            width: isSelected ? 2.5 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: isSelected ? borderColor : PusakaTheme.slate600,
+                  size: 20,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              kontingen.toUpperCase(),
+              style: const TextStyle(
+                color: PusakaTheme.slate400,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: borderColor.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'Total Skor: $skor',
+                style: TextStyle(
+                  color: borderColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKemenanganButton(Map<String, String> item) {
+    final code = item['code']!;
+    final label = item['label']!;
+    final isActive = _selectedKode == code;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedKode = code),
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: isActive
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.16)
+              : PusakaTheme.slate900,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? const Color(0xFFFBBF24) : const Color(0xFF334155),
+            width: isActive ? 2.0 : 1.0,
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isActive
+                      ? const Color(0xFFFBBF24)
+                      : const Color(0xFF475569),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                code,
+                style: TextStyle(
+                  color: isActive ? Colors.black : PusakaTheme.slate300,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : PusakaTheme.slate300,
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              isActive
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: isActive ? const Color(0xFFFBBF24) : PusakaTheme.slate600,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

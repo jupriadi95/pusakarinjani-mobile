@@ -76,6 +76,62 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
   // ── Keputusan Dewan saat skor SERI ('biru' | 'merah') ──
   String? _dewanPemenang;
 
+  // ── Jenis Kemenangan ──
+  String? _jenisKemenangan;
+  String? _kodeKemenangan;
+
+  String? get _resolvedJenisKemenangan {
+    if (_jenisKemenangan != null && _jenisKemenangan!.isNotEmpty) {
+      return _jenisKemenangan;
+    }
+    final ket = _activeJadwal?.keterangan ?? _resolveActiveJadwal()?.keterangan;
+    if (ket != null && ket.isNotEmpty && ket.contains(' - ')) {
+      final parts = ket.split(' - ');
+      return parts.sublist(1).join(' - ').trim();
+    }
+    return null;
+  }
+
+  String? get _resolvedKodeKemenangan {
+    if (_kodeKemenangan != null && _kodeKemenangan!.isNotEmpty) {
+      return _kodeKemenangan;
+    }
+    final ket = _activeJadwal?.keterangan ?? _resolveActiveJadwal()?.keterangan;
+    if (ket != null && ket.isNotEmpty && ket.contains(' - ')) {
+      final parts = ket.split(' - ');
+      return parts[0].trim();
+    }
+    return null;
+  }
+
+  void _parseKemenanganData(Map<String, dynamic> data) {
+    final jk = data['jenisKemenangan']?.toString();
+    final kk = data['kodeKemenangan']?.toString();
+    final k = data['kemenangan']?.toString();
+
+    if (jk != null && jk.isNotEmpty) {
+      _jenisKemenangan = jk;
+    }
+    if (kk != null && kk.isNotEmpty) {
+      _kodeKemenangan = kk;
+    }
+    if (_jenisKemenangan == null && k != null && k.isNotEmpty) {
+      if (k == 'diskualifikasi') {
+        _kodeKemenangan = 'DQ';
+        _jenisKemenangan = 'Menang Diskualifikasi';
+      } else if (k == 'keputusan_dewan') {
+        _kodeKemenangan = 'KD';
+        _jenisKemenangan = 'Keputusan Dewan';
+      } else if (k.contains(' - ')) {
+        final parts = k.split(' - ');
+        _kodeKemenangan = parts[0].trim();
+        _jenisKemenangan = parts.sublist(1).join(' - ').trim();
+      } else {
+        _jenisKemenangan = k;
+      }
+    }
+  }
+
   // ── Disqualification State ──
   String? _dsqSudut; // 'biru' | 'merah'
   String? _dsqNama;
@@ -170,6 +226,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _hideWinnerModal();
           setState(() {
             _dewanPemenang = null;
+            _jenisKemenangan = null;
+            _kodeKemenangan = null;
             _dsqSudut = null;
             _dsqNama = null;
             _dsqMessage = null;
@@ -488,6 +546,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _startTimer();
           _hideWinnerModal();
           _dewanPemenang = null;
+          _jenisKemenangan = null;
+          _kodeKemenangan = null;
           _dsqSudut = null;
           _dsqNama = null;
         } else if (action == 'reset') {
@@ -495,6 +555,8 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _timerSeconds = 0;
           _hideWinnerModal();
           _dewanPemenang = null;
+          _jenisKemenangan = null;
+          _kodeKemenangan = null;
           _dsqSudut = null;
           _dsqNama = null;
           _kpBinaanBiru = 0;
@@ -503,11 +565,13 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
           _kpTeguranMerah = 0;
         } else if (action == 'stop') {
           _pauseTimer();
+          _parseKemenanganData(data);
           _triggerWinnerModal();
         }
       });
 
       if (pemenang == 'biru' || pemenang == 'merah') {
+        _parseKemenanganData(data);
         _triggerWinnerModal();
       }
 
@@ -548,6 +612,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
         if (pemenang == 'biru' || pemenang == 'merah') {
           _dewanPemenang = pemenang;
         }
+        _parseKemenanganData(data);
         _pauseTimer();
       });
       _triggerWinnerModal();
@@ -3153,14 +3218,20 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
       return _buildSeriStatsModal();
     }
 
+    final resolvedJenis = _resolvedJenisKemenangan;
+    final resolvedKode = _resolvedKodeKemenangan;
+    final victoryBadgeText = resolvedKode != null && resolvedKode.isNotEmpty
+        ? '$resolvedKode — ${resolvedJenis?.toUpperCase() ?? ""}'
+        : (resolvedJenis?.toUpperCase() ?? "");
+
     final isBiruWin = isDsq
         ? (_dsqSudut == 'merah')
-        : isDewanDecision
+        : _dewanPemenang != null
         ? _dewanPemenang == 'biru'
         : (biruScore > merahScore);
     final isMerahWin = isDsq
         ? (_dsqSudut == 'biru')
-        : isDewanDecision
+        : _dewanPemenang != null
         ? _dewanPemenang == 'merah'
         : (merahScore > biruScore);
 
@@ -3244,6 +3315,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                       winnerTitle: winnerTitle,
                       winnerColor: winnerColor,
                       winnerBorder: winnerBorder,
+                      victoryBadge: victoryBadgeText,
                     ),
 
                     const SizedBox(width: 28),
@@ -3294,6 +3366,7 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     required String winnerTitle,
     required Color winnerColor,
     required Color winnerBorder,
+    String? victoryBadge,
   }) {
     return Container(
       width: 350,
@@ -3441,6 +3514,34 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (victoryBadge != null && victoryBadge.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD97706).withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFBBF24),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        victoryBadge.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3535,6 +3636,9 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
     required bool isMerahWin,
     required double width,
   }) {
+    final resolvedJenis = _resolvedJenisKemenangan;
+    final resolvedKode = _resolvedKodeKemenangan;
+
     return Container(
       width: width,
       padding: const EdgeInsets.all(26),
@@ -3591,7 +3695,57 @@ class _MonitorScreenState extends ConsumerState<MonitorScreen> {
             ),
           ),
 
-          if (isDewanDecision) ...[
+          if (resolvedJenis != null || resolvedKode != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFD97706),
+                    Color(0xFFB45309),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFFBBF24),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.45),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Color(0xFFFEF08A),
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    resolvedKode != null && resolvedKode.isNotEmpty
+                        ? '$resolvedKode — ${resolvedJenis?.toUpperCase() ?? ""}'
+                        : resolvedJenis?.toUpperCase() ?? '',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (isDewanDecision) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(

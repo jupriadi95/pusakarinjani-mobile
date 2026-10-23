@@ -387,6 +387,7 @@ class _JuriScreenState extends ConsumerState<JuriScreen> {
     };
 
     _socketService.emitJuriVote(payload);
+    _socketService.emitJuriTekan(payload);
 
     // Immediate local feedback
     _showVoteBanner(
